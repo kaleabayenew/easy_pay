@@ -62,18 +62,29 @@ npm run build && npm start  # Production
 
 ## API Endpoints
 
+Open `/` on the running service for a JSON API index with the available routes.
+`GET /health` provides a health check.
+
+All application endpoints are prefixed with `/api/v1`.
+
 ### Authentication
-- `POST /api/v1/login` - User login
-- `POST /api/v1/register` - User registration
+- `POST /api/v1/auth/login` - User login
+- `POST /api/v1/auth/register` - User registration
+- `POST /api/v1/auth/change-pin` - Change PIN (Bearer token required)
+- `POST /api/v1/auth/request-otp` - Request a one-time password
+- `POST /api/v1/auth/verify-otp` - Verify a one-time password
 
 ### SMS
 - `POST /api/v1/sms` - Receive SMS (requires HMAC signature)
-- `GET /api/v1/sms/logs/:deviceId` - Get SMS logs
+- `GET /api/v1/sms/logs/:deviceId` - Get SMS logs (Bearer token required)
+- `POST /api/v1/sms/:id/retry` - Retry SMS (Bearer token required)
+- `DELETE /api/v1/sms/:id` - Delete SMS (Bearer token required)
 
 ### Device
 - `POST /api/v1/heartbeat` - Device heartbeat (requires HMAC signature)
-- `POST /api/v1/device/status` - Get device status (requires HMAC signature)
-- `POST /api/v1/device/deactivate` - Deactivate device (requires HMAC signature)
+- `GET /api/v1/devices` - List devices (Bearer token required)
+- `GET /api/v1/devices/:deviceId` - Get device status (Bearer token required)
+- `POST /api/v1/devices/:deviceId/deactivate` - Deactivate device (Bearer token and HMAC signature required)
 
 ## HMAC Signature Verification
 

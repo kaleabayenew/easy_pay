@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { Device, User } from '../models';
+import { ownersStore } from './superadminController';
 
 export interface OtpRecord {
   id: string;
@@ -78,18 +79,30 @@ export const isIdentifierBlocked = (identifier: string): BlockedRecord | null =>
 
 export const requestOtp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phone, deviceId, ownerName } = req.body;
+    const rawPhone = req.body.phone || req.body.identifier;
+    const rawPin = req.body.pin;
+    const rawDeviceId =
+      req.body.deviceId ||
+      (rawPhone ? `easypay_dev_${String(rawPhone).replace(/\D/g, '')}` : 'easypay_dev_unknown');
 
-    if (!phone || !deviceId) {
+    if (!rawPhone) {
       res.status(400).json({
         success: false,
-        message: 'Phone number and deviceId are required',
+        message: 'Phone number is required',
       });
       return;
     }
 
-    const cleanPhone = phone.trim();
-    const cleanDeviceId = deviceId.trim();
+    // Normalize phone number to +251... format
+    let cleanPhone = String(rawPhone).trim().replace(/\s+/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '+251' + cleanPhone.substring(1);
+    } else if (cleanPhone.startsWith('251')) {
+      cleanPhone = '+' + cleanPhone;
+    } else if (cleanPhone.startsWith('9') || cleanPhone.startsWith('7')) {
+      cleanPhone = '+251' + cleanPhone;
+    }
+    const cleanDeviceId = String(rawDeviceId).trim();
 
     // Check if phone or device is blocked
     const phoneBlocked = isIdentifierBlocked(cleanPhone);
@@ -111,6 +124,55 @@ export const requestOtp = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    // Query registered owner from Database User table or ownersStore
+    let registeredOwner: { name: string; phone: string; pin: string } | null = null;
+    try {
+      const dbUser = await User.findOne({ where: { phone: cleanPhone } });
+      if (dbUser) {
+        registeredOwner = {
+          name: dbUser.name || `Partner (${dbUser.phone})`,
+          phone: dbUser.phone,
+          pin: dbUser.pin,
+        };
+      }
+    } catch (_) {}
+
+    if (!registeredOwner) {
+      const inMemory = ownersStore.find(
+        (o) => o.phone === cleanPhone || o.phone.endsWith(cleanPhone.slice(-9))
+      );
+      if (inMemory) {
+        registeredOwner = {
+          name: inMemory.name,
+          phone: inMemory.phone,
+          pin: inMemory.pin,
+        };
+      }
+    }
+
+    // Check if phone is registered in system
+    if (!registeredOwner) {
+      res.status(404).json({
+        success: false,
+        error: 'NOT_REGISTERED',
+        message: `Phone number ${cleanPhone} is not registered in the database. Super Admin must create an Owner account with this phone number first.`,
+      });
+      return;
+    }
+
+    // Validate PIN if provided from SMS Monitor
+    if (rawPin !== undefined && rawPin !== null && String(rawPin).trim().length > 0) {
+      const cleanPin = String(rawPin).trim();
+      if (cleanPin !== registeredOwner.pin) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_PIN',
+          message: 'Incorrect terminal PIN for this registered owner phone number.',
+        });
+        return;
+      }
+    }
+
     // Generate 6-digit OTP
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const now = new Date();
@@ -127,7 +189,7 @@ export const requestOtp = async (req: Request, res: Response): Promise<void> => 
       id: `otp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       phone: cleanPhone,
       deviceId: cleanDeviceId,
-      ownerName: ownerName || 'Betting Partner',
+      ownerName: registeredOwner.name,
       otpCode: code,
       attempts: 0,
       maxAttempts: 5,

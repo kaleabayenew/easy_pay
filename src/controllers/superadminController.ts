@@ -198,41 +198,118 @@ function ifOfflineAlert(offline: number) {
 
 // ─── Owners ──────────────────────────────────────────────────────
 
+export interface OwnerRecord {
+  id: string;
+  name: string;
+  username: string;
+  password?: string;
+  email: string;
+  phone: string;
+  pin: string;
+  status: 'active' | 'suspended';
+  linked_devices_count: number;
+  today_deposits_amount: number;
+  today_withdrawals_amount: number;
+  created_at: string;
+}
+
+export const ownersStore: OwnerRecord[] = [
+  {
+    id: 'own_1',
+    name: 'Habesha Bet Holdings',
+    username: 'habesha_admin',
+    password: 'Password@123',
+    email: 'habesha@betplatform.et',
+    phone: '+251911223344',
+    pin: '1234',
+    status: 'active',
+    linked_devices_count: 2,
+    today_deposits_amount: 18500.0,
+    today_withdrawals_amount: 9200.0,
+    created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+  },
+  {
+    id: 'own_2',
+    name: 'Vip Winner Gaming PLC',
+    username: 'vip_winner',
+    password: 'Password@123',
+    email: 'ops@vipwinner.et',
+    phone: '+251922334455',
+    pin: '5678',
+    status: 'active',
+    linked_devices_count: 3,
+    today_deposits_amount: 34100.0,
+    today_withdrawals_amount: 14200.0,
+    created_at: new Date(Date.now() - 14 * 86400000).toISOString(),
+  },
+];
+
 export const getOwners = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
-    const search = req.query.search as string;
+    const search = (req.query.search as string || '').toLowerCase().trim();
 
-    const where: any = {};
-    if (search) {
-      where.phone = { [Op.like]: `%${search}%` };
+    // Query DB users if available
+    let dbItems: any[] = [];
+    try {
+      const rows = await User.findAll({ order: [['createdAt', 'DESC']] });
+      dbItems = rows.map((u) => ({
+        id: `own_${u.id}`,
+        name: u.name || `Betting Partner #${u.id}`,
+        status: u.isActive ? 'active' : 'suspended',
+        linked_devices_count: 1,
+        today_deposits_amount: 12500.0,
+        today_withdrawals_amount: 5400.0,
+        contact_email: `${u.username || 'partner' + u.id}@betplatform.et`,
+        contact_phone: u.phone,
+        initial_admin_username: u.username || 'admin',
+        pin: u.pin || '1234',
+        created_at: u.createdAt,
+      }));
+    } catch (_) {}
+
+    // Merge in-memory and DB items avoiding duplicate phone numbers
+    const phoneMap = new Map<string, any>();
+    for (const item of ownersStore) {
+      phoneMap.set(item.phone, {
+        id: item.id,
+        name: item.name,
+        status: item.status,
+        linked_devices_count: item.linked_devices_count,
+        today_deposits_amount: item.today_deposits_amount,
+        today_withdrawals_amount: item.today_withdrawals_amount,
+        contact_email: item.email,
+        contact_phone: item.phone,
+        initial_admin_username: item.username,
+        pin: item.pin,
+        created_at: item.created_at,
+      });
+    }
+    for (const item of dbItems) {
+      if (!phoneMap.has(item.contact_phone)) {
+        phoneMap.set(item.contact_phone, item);
+      }
     }
 
-    const { count, rows } = await User.findAndCountAll({
-      where,
-      limit,
-      offset: (page - 1) * limit,
-      order: [['createdAt', 'DESC']],
-    });
+    let allItems = Array.from(phoneMap.values());
+    if (search) {
+      allItems = allItems.filter(
+        (o) =>
+          o.name.toLowerCase().includes(search) ||
+          o.contact_phone.includes(search) ||
+          (o.initial_admin_username && o.initial_admin_username.toLowerCase().includes(search))
+      );
+    }
 
-    const items = rows.map((u, i) => ({
-      id: `own_${u.id}`,
-      name: `Betting Partner #${u.id} (${u.phone})`,
-      status: u.isActive ? 'active' : 'suspended',
-      linked_devices_count: 2,
-      today_deposits_amount: 15420.0 + i * 2100,
-      today_withdrawals_amount: 8300.0 + i * 1400,
-      contact_email: `partner${u.id}@betplatform.et`,
-      contact_phone: u.phone,
-      created_at: u.createdAt,
-    }));
+    const total = allItems.length;
+    const paginatedItems = allItems.slice((page - 1) * limit, page * limit);
 
     res.json({
-      items,
-      total: count,
+      items: paginatedItems,
+      total,
       page,
-      total_pages: Math.max(1, Math.ceil(count / limit)),
+      total_pages: Math.max(1, Math.ceil(total / limit)),
     });
   } catch (error) {
     console.error('Get owners error:', error);
@@ -242,19 +319,102 @@ export const getOwners = async (req: Request, res: Response): Promise<void> => {
 
 export const createOwner = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, contact_email, contact_phone, initial_admin_username, temporary_password } = req.body;
-    logAudit('superadmin', 'CREATE_OWNER', 'new', name, 'Created betting owner account', req.ip || '127.0.0.1');
-    res.status(201).json({
-      id: `own_${Date.now()}`,
+    const {
       name,
-      status: 'active',
       contact_email,
       contact_phone,
       initial_admin_username,
       temporary_password,
+      password,
+      pin,
+      mobile_pin,
+    } = req.body;
+
+    const rawPhone = contact_phone || req.body.phone;
+    if (!rawPhone || !name) {
+      res.status(400).json({ success: false, message: 'Owner name and mobile phone number are required' });
+      return;
+    }
+
+    // Normalize phone number to +251XXXXXXXXX
+    let cleanPhone = String(rawPhone).trim().replace(/\s+/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '+251' + cleanPhone.substring(1);
+    } else if (cleanPhone.startsWith('251')) {
+      cleanPhone = '+' + cleanPhone;
+    } else if (cleanPhone.startsWith('9') || cleanPhone.startsWith('7')) {
+      cleanPhone = '+251' + cleanPhone;
+    }
+
+    const effectivePin = String(pin || mobile_pin || '1234').trim();
+    const effectivePassword = String(password || temporary_password || 'Admin@123').trim();
+    const effectiveUsername = String(initial_admin_username || `owner_${Date.now()}`).trim();
+    const effectiveEmail = String(contact_email || `${effectiveUsername}@betplatform.et`).trim();
+
+    // Persist into DB User table if database is running
+    let dbUser: any = null;
+    try {
+      const [userRecord] = await User.upsert({
+        phone: cleanPhone,
+        pin: effectivePin,
+        name,
+        username: effectiveUsername,
+        password: effectivePassword,
+        role: 'device_user',
+        isActive: true,
+      });
+      dbUser = userRecord;
+    } catch (dbErr) {
+      console.warn('Database upsert warning (falling back to memory store):', dbErr);
+    }
+
+    const newOwner: OwnerRecord = {
+      id: dbUser?.id ? `own_${dbUser.id}` : `own_${Date.now()}`,
+      name,
+      username: effectiveUsername,
+      password: effectivePassword,
+      email: effectiveEmail,
+      phone: cleanPhone,
+      pin: effectivePin,
+      status: 'active',
+      linked_devices_count: 1,
+      today_deposits_amount: 0,
+      today_withdrawals_amount: 0,
       created_at: new Date().toISOString(),
+    };
+
+    // Remove any older duplicate entry in memory
+    const existingIdx = ownersStore.findIndex((o) => o.phone === cleanPhone);
+    if (existingIdx >= 0) {
+      ownersStore[existingIdx] = newOwner;
+    } else {
+      ownersStore.unshift(newOwner);
+    }
+
+    logAudit(
+      'superadmin',
+      'CREATE_OWNER',
+      newOwner.id,
+      name,
+      `Created owner account for ${name} (${cleanPhone}) with SMS terminal PIN (${effectivePin}) and admin password`,
+      req.ip || '127.0.0.1'
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Owner created successfully and registered for SMS monitor terminal access',
+      data: newOwner,
+      id: newOwner.id,
+      name: newOwner.name,
+      status: newOwner.status,
+      contact_phone: newOwner.phone,
+      contact_email: newOwner.email,
+      initial_admin_username: newOwner.username,
+      pin: newOwner.pin,
+      temporary_password: newOwner.password,
     });
   } catch (error) {
+    console.error('Owner creation error:', error);
     res.status(500).json({ success: false, message: 'Owner creation failed' });
   }
 };

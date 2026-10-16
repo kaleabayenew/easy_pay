@@ -7,6 +7,8 @@ class User extends Model {
   public pin!: string;
   public isActive!: boolean;
   public role!: string;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
 User.init(

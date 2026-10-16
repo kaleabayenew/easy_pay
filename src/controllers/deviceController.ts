@@ -64,6 +64,8 @@ export const heartbeat = async (req: Request, res: Response): Promise<void> => {
       // Security policy: if rooted, deactivate automatically
       if (isRooted === true) updates.isActive = false;
       await device.update(updates);
+      // Reload to get the latest persisted values (isActive may have changed)
+      await device.reload();
     }
 
     res.json({

@@ -15,17 +15,27 @@ const migrate = async (): Promise<void> => {
     console.log('Database migration completed successfully');
 
     // Seed default admin user if not exists
-    const adminPhone = '+251900000000';
+    // IMPORTANT: Change the PIN immediately after first login via POST /api/v1/auth/change-pin
+    // The seed PIN is read from ADMIN_SEED_PIN env var — must be set before running migrate
+    const adminSeedPin = process.env.ADMIN_SEED_PIN;
+    if (!adminSeedPin) {
+      console.error('ERROR: ADMIN_SEED_PIN environment variable is not set. Skipping seed.');
+      console.error('Set ADMIN_SEED_PIN in your .env file and re-run migrate to create the admin user.');
+      process.exit(1);
+    }
+
+    const adminPhone = process.env.ADMIN_SEED_PHONE || '+251900000000';
     const existing = await User.findOne({ where: { phone: adminPhone } });
     if (!existing) {
-      const hashedPin = await bcrypt.hash('0000', BCRYPT_ROUNDS);
+      const hashedPin = await bcrypt.hash(adminSeedPin, BCRYPT_ROUNDS);
       await User.create({
         phone: adminPhone,
         pin: hashedPin,
         role: 'admin',
         isActive: true,
       });
-      console.log('Seed complete: default admin user created');
+      console.log(`Seed complete: admin user created for phone ${adminPhone}`);
+      console.log('ACTION REQUIRED: Change the admin PIN immediately after first login.');
     } else {
       console.log('Seed skipped: admin user already exists');
     }

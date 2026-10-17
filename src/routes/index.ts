@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, register, changePin, createOwner, checkUserExists } from '../controllers/authController';
+import { login, register, changePin, createOwner, checkUserExists, checkDeviceExists } from '../controllers/authController';
 import { requestOtp, verifyOtp } from '../controllers/otpController';
 import { receiveSms, getSmsLogs, retrySms, deleteSms } from '../controllers/smsController';
 import { heartbeat, getDeviceStatus, listDevices, deactivateDevice, registerDevice } from '../controllers/deviceController';
@@ -19,6 +19,7 @@ router.post('/auth/register', register);
 router.post('/auth/change-pin', authenticate, changePin);
 router.post('/auth/create-owner', authenticate, createOwner);
 router.post('/auth/check-user', checkUserExists);
+router.post('/auth/check-device', checkDeviceExists);
 router.post('/auth/request-otp', requestOtp);
 router.post('/auth/verify-otp', verifyOtp);
 

@@ -20,6 +20,7 @@ router.post('/auth/register', authController_1.register);
 router.post('/auth/change-pin', auth_1.authenticate, authController_1.changePin);
 router.post('/auth/create-owner', auth_1.authenticate, authController_1.createOwner);
 router.post('/auth/check-user', authController_1.checkUserExists);
+router.post('/auth/check-device', authController_1.checkDeviceExists);
 router.post('/auth/request-otp', otpController_1.requestOtp);
 router.post('/auth/verify-otp', otpController_1.verifyOtp);
 // SMS routes

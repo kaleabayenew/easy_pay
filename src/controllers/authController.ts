@@ -218,6 +218,51 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+export const checkDeviceExists = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { deviceId } = req.body as { deviceId?: string };
+
+    if (!deviceId) {
+      res.status(400).json({ success: false, message: 'Device ID is required' });
+      return;
+    }
+
+    const device = await Device.findOne({
+      where: { deviceId },
+      attributes: ['deviceId', 'userId', 'isActive'],
+    });
+
+    if (!device) {
+      res.json({ success: true, exists: false, message: 'Device not found' });
+      return;
+    }
+
+    // Get user info if device exists
+    const user = await User.findOne({
+      where: { id: device.userId },
+      attributes: ['id', 'phone', 'businessName'],
+    });
+
+    res.json({
+      success: true,
+      exists: true,
+      device: {
+        deviceId: device.deviceId,
+        isActive: device.isActive,
+        userId: device.userId,
+      },
+      user: user ? {
+        id: user.id,
+        phone: user.phone,
+        businessName: user.businessName,
+      } : null,
+    });
+  } catch (error) {
+    console.error('Check device exists error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 export const checkUserExists = async (req: Request, res: Response): Promise<void> => {
   try {
     const { phone, deviceId } = req.body as { phone: string; deviceId?: string };

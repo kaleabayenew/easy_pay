@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkUserExists = exports.createOwner = exports.changePin = exports.register = exports.login = void 0;
+exports.checkUserExists = exports.checkDeviceExists = exports.createOwner = exports.changePin = exports.register = exports.login = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const models_1 = require("../models");
@@ -194,6 +194,47 @@ const createOwner = async (req, res) => {
     }
 };
 exports.createOwner = createOwner;
+const checkDeviceExists = async (req, res) => {
+    try {
+        const { deviceId } = req.body;
+        if (!deviceId) {
+            res.status(400).json({ success: false, message: 'Device ID is required' });
+            return;
+        }
+        const device = await models_1.Device.findOne({
+            where: { deviceId },
+            attributes: ['deviceId', 'userId', 'isActive'],
+        });
+        if (!device) {
+            res.json({ success: true, exists: false, message: 'Device not found' });
+            return;
+        }
+        // Get user info if device exists
+        const user = await models_1.User.findOne({
+            where: { id: device.userId },
+            attributes: ['id', 'phone', 'businessName'],
+        });
+        res.json({
+            success: true,
+            exists: true,
+            device: {
+                deviceId: device.deviceId,
+                isActive: device.isActive,
+                userId: device.userId,
+            },
+            user: user ? {
+                id: user.id,
+                phone: user.phone,
+                businessName: user.businessName,
+            } : null,
+        });
+    }
+    catch (error) {
+        console.error('Check device exists error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+exports.checkDeviceExists = checkDeviceExists;
 const checkUserExists = async (req, res) => {
     try {
         const { phone, deviceId } = req.body;

@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const superadminController_1 = require("../controllers/superadminController");
+const superadminTransactionController_1 = require("../controllers/superadminTransactionController");
+const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 // Auth routes (public login + session verify)
 router.post('/login', superadminController_1.superadminLogin);
@@ -17,6 +19,10 @@ router.post('/blocked/:id/unblock', superadminController_1.unblockEntity);
 router.post('/blocked', superadminController_1.blockEntity);
 // Analysis (SMS Completed vs Failed API Breakdown)
 router.get('/analysis/sms', superadminController_1.getSmsAnalysis);
+// Transaction Verifications
+router.get('/verifications', auth_1.authenticate, superadminTransactionController_1.getAllVerifications);
+router.get('/verifications/stats', auth_1.authenticate, superadminTransactionController_1.getVerificationStats);
+router.get('/verifications/:id', auth_1.authenticate, superadminTransactionController_1.getVerificationById);
 // Owners
 router.get('/owners', superadminController_1.getOwners);
 router.post('/owners', superadminController_1.createOwner);

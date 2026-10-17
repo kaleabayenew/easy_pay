@@ -7,6 +7,7 @@ class ApiKey extends Model {
   public apiKey!: string;
   public keyPrefix!: string;
   public isActive!: boolean;
+  public webhookUrl?: string;
   public lastUsedAt?: Date;
   public expiresAt?: Date;
   public readonly createdAt!: Date;
@@ -25,6 +26,7 @@ ApiKey.init(
     apiKey: { type: DataTypes.STRING, allowNull: false, unique: true },
     keyPrefix: { type: DataTypes.STRING, allowNull: false },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+    webhookUrl: { type: DataTypes.STRING, allowNull: true },
     lastUsedAt: { type: DataTypes.DATE, allowNull: true },
     expiresAt: { type: DataTypes.DATE, allowNull: true },
   },

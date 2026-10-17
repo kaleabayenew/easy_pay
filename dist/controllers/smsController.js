@@ -2,9 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteSms = exports.retrySms = exports.getSmsLogs = exports.receiveSms = void 0;
 const models_1 = require("../models");
+const webhookService_1 = require("../services/webhookService");
 const receiveSms = async (req, res) => {
     try {
-        const { deviceId, sender, body, timestamp, simSerial } = req.body;
+        const { deviceId, sender, body, timestamp, simSerial, transactionId, amount, method } = req.body;
         if (!deviceId || !sender || !body || !timestamp) {
             res.status(400).json({
                 success: false,
@@ -31,7 +32,77 @@ const receiveSms = async (req, res) => {
             retryCount: 0,
         });
         await device.update({ lastHeartbeat: new Date() });
-        res.json({ success: true, smsId: smsLog.id.toString(), message: 'SMS received' });
+        // Check for pending transaction verification
+        let verificationMatched = null;
+        if (transactionId && amount && method && device.userId) {
+            // Find pending verification for this owner
+            const pendingVerification = await models_1.TransactionVerification.findOne({
+                where: {
+                    ownerId: device.userId,
+                    status: 'pending',
+                    transactionId: transactionId,
+                },
+            });
+            if (pendingVerification) {
+                // Match transaction details
+                const amountMatch = Math.abs(parseFloat(amount.toString()) - pendingVerification.amount) < 0.01;
+                const methodMatch = method.toLowerCase() === pendingVerification.method.toLowerCase();
+                if (amountMatch && methodMatch) {
+                    // Exact match
+                    await pendingVerification.update({
+                        smsTransactionId: transactionId,
+                        smsAmount: parseFloat(amount.toString()),
+                        smsMethod: method,
+                        status: 'matched',
+                        smsReceivedAt: new Date(),
+                        matchedAt: new Date(),
+                        responseSentAt: new Date(),
+                    });
+                    // Send webhook if configured
+                    const apiKey = await models_1.ApiKey.findByPk(pendingVerification.apiKeyId);
+                    if (apiKey && apiKey.webhookUrl) {
+                        await (0, webhookService_1.sendWebhook)(apiKey.webhookUrl, {
+                            verificationId: pendingVerification.id,
+                            transactionId: pendingVerification.transactionId,
+                            amount: pendingVerification.amount,
+                            method: pendingVerification.method,
+                            status: 'matched',
+                            smsTransactionId: transactionId,
+                            smsAmount: parseFloat(amount.toString()),
+                            smsMethod: method,
+                            matchedAt: pendingVerification.matchedAt,
+                        });
+                    }
+                    verificationMatched = {
+                        verificationId: pendingVerification.id,
+                        status: 'matched',
+                        message: 'Transaction verified successfully',
+                    };
+                }
+                else {
+                    // Partial match or mismatch
+                    await pendingVerification.update({
+                        smsTransactionId: transactionId,
+                        smsAmount: parseFloat(amount.toString()),
+                        smsMethod: method,
+                        status: 'mismatched',
+                        smsReceivedAt: new Date(),
+                        matchedAt: new Date(),
+                    });
+                    verificationMatched = {
+                        verificationId: pendingVerification.id,
+                        status: 'mismatched',
+                        message: 'Transaction details do not match',
+                    };
+                }
+            }
+        }
+        res.json({
+            success: true,
+            smsId: smsLog.id.toString(),
+            message: 'SMS received',
+            verification: verificationMatched,
+        });
     }
     catch (error) {
         console.error('SMS receive error:', error);

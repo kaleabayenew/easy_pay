@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+/// <reference path="./types/express.d.ts" />
 require("dotenv/config");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
@@ -10,6 +11,7 @@ const helmet_1 = __importDefault(require("helmet"));
 const database_1 = require("./config/database");
 const routes_1 = __importDefault(require("./routes"));
 require("./models"); // Ensure associations are registered
+const verificationCleanupService_1 = require("./services/verificationCleanupService");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
 // Security headers
@@ -32,6 +34,80 @@ app.use((0, cors_1.default)({
 // Body parsing with size limit to prevent large payload attacks
 app.use(express_1.default.json({ limit: '10kb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10kb' }));
+// ─── Request Logger Middleware ────────────────────────────────────────────────
+const COLORS = {
+    reset: '\x1b[0m',
+    bright: '\x1b[1m',
+    dim: '\x1b[2m',
+    cyan: '\x1b[36m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    red: '\x1b[31m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    white: '\x1b[37m',
+    gray: '\x1b[90m',
+};
+function getMethodColor(method) {
+    const map = {
+        GET: COLORS.green,
+        POST: COLORS.cyan,
+        PUT: COLORS.yellow,
+        PATCH: COLORS.magenta,
+        DELETE: COLORS.red,
+    };
+    return map[method] ?? COLORS.white;
+}
+function getStatusColor(status) {
+    if (status < 300)
+        return COLORS.green;
+    if (status < 400)
+        return COLORS.cyan;
+    if (status < 500)
+        return COLORS.yellow;
+    return COLORS.red;
+}
+function formatTime() {
+    return new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+app.use((req, res, next) => {
+    const start = Date.now();
+    const { method, originalUrl, ip } = req;
+    const methodColor = getMethodColor(method);
+    // Log incoming request immediately
+    console.log(`${COLORS.gray}[${formatTime()}]${COLORS.reset} ` +
+        `${COLORS.bright}${methodColor}${method.padEnd(7)}${COLORS.reset} ` +
+        `${COLORS.white}${originalUrl}${COLORS.reset} ` +
+        `${COLORS.gray}← from ${ip ?? 'unknown'}${COLORS.reset}`);
+    // Log body for non-GET requests (hide sensitive fields)
+    if (method !== 'GET' && req.body && Object.keys(req.body).length > 0) {
+        const safeBody = { ...req.body };
+        if (safeBody.pin)
+            safeBody.pin = '****';
+        if (safeBody.password)
+            safeBody.password = '****';
+        if (safeBody.otpCode)
+            safeBody.otpCode = '****';
+        if (safeBody.code)
+            safeBody.code = '****';
+        console.log(`${COLORS.gray}         body: ${JSON.stringify(safeBody)}${COLORS.reset}`);
+    }
+    // Intercept response to log status and duration
+    const originalSend = res.send.bind(res);
+    res.send = function (body) {
+        const duration = Date.now() - start;
+        const statusColor = getStatusColor(res.statusCode);
+        const durationColor = duration > 1000 ? COLORS.red : duration > 500 ? COLORS.yellow : COLORS.green;
+        console.log(`${COLORS.gray}[${formatTime()}]${COLORS.reset} ` +
+            `${COLORS.bright}${methodColor}${method.padEnd(7)}${COLORS.reset} ` +
+            `${COLORS.white}${originalUrl}${COLORS.reset} ` +
+            `${COLORS.bright}${statusColor}${res.statusCode}${COLORS.reset} ` +
+            `${durationColor}(${duration}ms)${COLORS.reset}`);
+        return originalSend(body);
+    };
+    next();
+});
+// ─────────────────────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
     res.json({
         name: 'EasyPay SMS Monitor API',
@@ -62,6 +138,10 @@ app.get('/', (_req, res) => {
                 'GET /api/v1/devices',
                 'GET /api/v1/devices/:deviceId',
                 'POST /api/v1/devices/:deviceId/deactivate',
+            ],
+            transaction: [
+                'POST /api/v1/verify-transaction',
+                'GET /api/v1/verify-transaction/:verificationId',
             ],
             superadmin: [
                 'POST /api/v1/superadmin/login',
@@ -114,17 +194,37 @@ app.use((err, _req, res, _next) => {
     console.error('Unhandled error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
 });
+function printStartupBanner(port) {
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`
+${COLORS.cyan}${COLORS.bright}  ███████╗ █████╗ ███████╗██╗   ██╗    ██████╗  █████╗ ██╗   ██╗
+  ██╔════╝██╔══██╗██╔════╝╚██╗ ██╔╝    ██╔══██╗██╔══██╗╚██╗ ██╔╝
+  █████╗  ███████║███████╗ ╚████╔╝     ██████╔╝███████║ ╚████╔╝ 
+  ██╔══╝  ██╔══██║╚════██║  ╚██╔╝      ██╔═══╝ ██╔══██║  ╚██╔╝  
+  ███████╗██║  ██║███████║   ██║       ██║     ██║  ██║   ██║   
+  ╚══════╝╚═╝  ╚═╝╚══════╝   ╚═╝       ╚═╝     ╚═╝  ╚═╝   ╚═╝   ${COLORS.reset}
+  ${COLORS.gray}─────────────────────────────────────────────────────────────${COLORS.reset}
+  ${COLORS.green}●${COLORS.reset} ${COLORS.bright}EasyPay SMS Monitor API${COLORS.reset} ${COLORS.gray}v1.0.0${COLORS.reset}
+  ${COLORS.cyan}➜${COLORS.reset}  ${COLORS.bright}Port:${COLORS.reset}        ${COLORS.green}${port}${COLORS.reset}
+  ${COLORS.cyan}➜${COLORS.reset}  ${COLORS.bright}Database:${COLORS.reset}    ${COLORS.green}Connected & Synced${COLORS.reset}
+  ${COLORS.cyan}➜${COLORS.reset}  ${COLORS.bright}Environment:${COLORS.reset} ${COLORS.yellow}${env}${COLORS.reset}
+  ${COLORS.gray}─────────────────────────────────────────────────────────────${COLORS.reset}
+`);
+}
 let server;
 const startServer = async () => {
     try {
         // Verify DB connection before sync
         await database_1.sequelize.authenticate();
-        console.log('Database connection established');
+        console.log(`${COLORS.gray}[Database] Connection established${COLORS.reset}`);
         await database_1.sequelize.sync({ alter: true });
-        console.log('Database synced successfully');
+        console.log(`${COLORS.gray}[Database] Synced successfully${COLORS.reset}`);
         server = app.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
+            printStartupBanner(PORT);
         });
+        // Start verification cleanup service
+        (0, verificationCleanupService_1.startVerificationCleanup)();
+        console.log(`${COLORS.gray}[Cleanup] Verification cleanup service running${COLORS.reset}`);
     }
     catch (error) {
         console.error('Failed to start server:', error);

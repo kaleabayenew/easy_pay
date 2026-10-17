@@ -32,6 +32,11 @@ import {
   blockEntity,
   getSmsAnalysis,
 } from '../controllers/superadminController';
+import {
+  getAllVerifications,
+  getVerificationById,
+  getVerificationStats,
+} from '../controllers/superadminTransactionController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -54,6 +59,11 @@ router.post('/blocked', blockEntity);
 
 // Analysis (SMS Completed vs Failed API Breakdown)
 router.get('/analysis/sms', getSmsAnalysis);
+
+// Transaction Verifications
+router.get('/verifications', authenticate, getAllVerifications);
+router.get('/verifications/stats', authenticate, getVerificationStats);
+router.get('/verifications/:id', authenticate, getVerificationById);
 
 // Owners
 router.get('/owners', getOwners);

@@ -446,7 +446,7 @@ const deleteOwner = async (req, res) => {
             try {
                 const userIdNum = parseInt(numericId, 10);
                 await models_1.Device.update({ userId: null }, { where: { userId: userIdNum } });
-                await ApiKey.destroy({ where: { ownerId: userIdNum } });
+                await models_1.ApiKey.destroy({ where: { ownerId: userIdNum } });
                 await models_1.User.destroy({ where: { id: userIdNum } });
             }
             catch (dbErr) {

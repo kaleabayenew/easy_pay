@@ -157,3 +157,110 @@ export const changePin = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+export const createOwner = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { businessName, phone, password, pin, credit } = req.body as {
+      businessName: string;
+      phone: string;
+      password: string;
+      pin: string;
+      credit: string;
+    };
+
+    if (!businessName || businessName.trim().length === 0) {
+      res.status(400).json({ success: false, message: 'Business name is required' });
+      return;
+    }
+    if (!phone || !PHONE_REGEX.test(phone)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid phone number format. Must be +251 followed by 7 or 9 and 8 digits.',
+      });
+      return;
+    }
+    if (!password || password.length < 6) {
+      res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+      return;
+    }
+    if (!pin || !PIN_REGEX.test(pin)) {
+      res.status(400).json({ success: false, message: 'PIN must be exactly 4 digits' });
+      return;
+    }
+    if (!credit || isNaN(parseFloat(credit))) {
+      res.status(400).json({ success: false, message: 'Credit must be a valid number' });
+      return;
+    }
+
+    const existing = await User.findOne({ where: { phone } });
+    if (existing) {
+      res.status(400).json({ success: false, message: 'Phone number already registered' });
+      return;
+    }
+
+    const hashedPin = await bcrypt.hash(pin, BCRYPT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    await User.create({
+      businessName: businessName.trim(),
+      phone,
+      password: hashedPassword,
+      pin: hashedPin,
+      credit: parseFloat(credit),
+      role: 'owner',
+      isActive: true,
+    });
+
+    res.status(201).json({ success: true, message: 'Owner created successfully' });
+  } catch (error) {
+    console.error('Create owner error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+export const checkUserExists = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone, deviceId } = req.body as { phone: string; deviceId?: string };
+
+    if (!phone || !PHONE_REGEX.test(phone)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid phone number format.',
+      });
+      return;
+    }
+
+    const user = await User.findOne({
+      where: { phone, isActive: true },
+      attributes: ['id', 'phone', 'businessName'],
+    });
+
+    if (!user) {
+      res.json({ success: true, exists: false, message: 'User not found' });
+      return;
+    }
+
+    // Check if device is already registered to this user
+    let deviceRegistered = false;
+    if (deviceId) {
+      const device = await Device.findOne({
+        where: { deviceId, userId: user.id },
+      });
+      deviceRegistered = !!device;
+    }
+
+    res.json({
+      success: true,
+      exists: true,
+      deviceRegistered,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        businessName: user.businessName,
+      },
+    });
+  } catch (error) {
+    console.error('Check user exists error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

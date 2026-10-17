@@ -279,57 +279,75 @@ export const getOwners = async (req: Request, res: Response): Promise<void> => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = (req.query.search as string || '').toLowerCase().trim();
+    const statusFilter = (req.query.status as string || '').toLowerCase().trim();
 
-    // Query DB users if available
+    // Query DB users if available — primary source
     let dbItems: any[] = [];
     try {
       const rows = await User.findAll({ order: [['createdAt', 'DESC']] });
       dbItems = rows.map((u) => ({
         id: `own_${u.id}`,
-        name: u.name || `Betting Partner #${u.id}`,
+        name: u.name || u.username || `Betting Partner #${u.id}`,
         status: u.isActive ? 'active' : 'suspended',
-        linked_devices_count: 1,
-        today_deposits_amount: 12500.0,
-        today_withdrawals_amount: 5400.0,
-        contact_email: `${u.username || 'partner' + u.id}@betplatform.et`,
+        linked_devices_count: 0,
+        today_deposits_amount: 0.0,
+        today_withdrawals_amount: 0.0,
+        today_deposits_total: 0.0,
+        today_withdrawals_total: 0.0,
+        contact_email: u.username ? `${u.username}@betplatform.et` : `user${u.id}@betplatform.et`,
         contact_phone: u.phone,
-        initial_admin_username: u.username || 'admin',
+        initial_admin_username: u.username || `user_${u.id}`,
         pin: u.pin || '1234',
-        created_at: u.createdAt,
+        created_at: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString(),
       }));
-    } catch (_) {}
-
-    // Merge in-memory and DB items avoiding duplicate phone numbers
-    const phoneMap = new Map<string, any>();
-    for (const item of ownersStore) {
-      phoneMap.set(item.phone, {
-        id: item.id,
-        name: item.name,
-        status: item.status,
-        linked_devices_count: item.linked_devices_count,
-        today_deposits_amount: item.today_deposits_amount,
-        today_withdrawals_amount: item.today_withdrawals_amount,
-        contact_email: item.email,
-        contact_phone: item.phone,
-        initial_admin_username: item.username,
-        pin: item.pin,
-        created_at: item.created_at,
-      });
+    } catch (dbErr) {
+      console.warn('DB owners query failed, using memory store:', dbErr);
     }
+
+    // Merge: DB is primary source, memory store fills in for phone numbers not in DB
+    const phoneMap = new Map<string, any>();
+
+    // First load DB items (most recent, authoritative)
     for (const item of dbItems) {
-      if (!phoneMap.has(item.contact_phone)) {
-        phoneMap.set(item.contact_phone, item);
+      phoneMap.set(item.contact_phone, item);
+    }
+
+    // Then add memory store items ONLY if not already covered by DB
+    for (const item of ownersStore) {
+      if (!phoneMap.has(item.phone)) {
+        phoneMap.set(item.phone, {
+          id: item.id,
+          name: item.name,
+          status: item.status,
+          linked_devices_count: item.linked_devices_count,
+          today_deposits_amount: item.today_deposits_amount,
+          today_withdrawals_amount: item.today_withdrawals_amount,
+          today_deposits_total: item.today_deposits_amount,
+          today_withdrawals_total: item.today_withdrawals_amount,
+          contact_email: item.email,
+          contact_phone: item.phone,
+          initial_admin_username: item.username,
+          pin: item.pin,
+          created_at: item.created_at,
+        });
       }
     }
 
     let allItems = Array.from(phoneMap.values());
+
+    // Apply search filter
     if (search) {
       allItems = allItems.filter(
         (o) =>
-          o.name.toLowerCase().includes(search) ||
-          o.contact_phone.includes(search) ||
-          (o.initial_admin_username && o.initial_admin_username.toLowerCase().includes(search))
+          (o.name || '').toLowerCase().includes(search) ||
+          (o.contact_phone || '').includes(search) ||
+          (o.initial_admin_username || '').toLowerCase().includes(search)
       );
+    }
+
+    // Apply status filter
+    if (statusFilter && statusFilter !== 'all') {
+      allItems = allItems.filter((o) => o.status === statusFilter);
     }
 
     const total = allItems.length;
@@ -450,17 +468,84 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
 };
 
 export const suspendOwner = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { reason } = req.body;
-  logAudit('superadmin', 'SUSPEND_OWNER', id, `Owner ${id}`, reason || 'Suspended by admin', req.ip || '127.0.0.1');
-  res.json({ success: true, message: 'Owner suspended', id, status: 'suspended' });
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Update DB if id is numeric (own_<number>)
+    const numericId = id.replace(/^own_/, '');
+    if (/^\d+$/.test(numericId)) {
+      try {
+        await User.update({ isActive: false }, { where: { id: parseInt(numericId) } });
+      } catch (dbErr) {
+        console.warn('DB suspend failed, updating memory store only:', dbErr);
+      }
+    }
+
+    // Update memory store
+    const ownerIdx = ownersStore.findIndex((o) => o.id === id);
+    if (ownerIdx >= 0) ownersStore[ownerIdx].status = 'suspended';
+
+    logAudit('superadmin', 'SUSPEND_OWNER', id, `Owner ${id}`, reason || 'Suspended by admin', req.ip || '127.0.0.1');
+    res.json({ success: true, message: 'Owner suspended', id, status: 'suspended' });
+  } catch (error) {
+    console.error('Suspend owner error:', error);
+    res.status(500).json({ success: false, message: 'Failed to suspend owner' });
+  }
 };
 
 export const reactivateOwner = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { reason } = req.body;
-  logAudit('superadmin', 'REACTIVATE_OWNER', id, `Owner ${id}`, reason || 'Reactivated by admin', req.ip || '127.0.0.1');
-  res.json({ success: true, message: 'Owner reactivated', id, status: 'active' });
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Update DB if id is numeric (own_<number>)
+    const numericId = id.replace(/^own_/, '');
+    if (/^\d+$/.test(numericId)) {
+      try {
+        await User.update({ isActive: true }, { where: { id: parseInt(numericId) } });
+      } catch (dbErr) {
+        console.warn('DB reactivate failed, updating memory store only:', dbErr);
+      }
+    }
+
+    // Update memory store
+    const ownerIdx = ownersStore.findIndex((o) => o.id === id);
+    if (ownerIdx >= 0) ownersStore[ownerIdx].status = 'active';
+
+    logAudit('superadmin', 'REACTIVATE_OWNER', id, `Owner ${id}`, reason || 'Reactivated by admin', req.ip || '127.0.0.1');
+    res.json({ success: true, message: 'Owner reactivated', id, status: 'active' });
+  } catch (error) {
+    console.error('Reactivate owner error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reactivate owner' });
+  }
+};
+
+export const deleteOwner = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Delete from DB if id is numeric (own_<number>)
+    const numericId = id.replace(/^own_/, '');
+    if (/^\d+$/.test(numericId)) {
+      try {
+        await User.destroy({ where: { id: parseInt(numericId) } });
+      } catch (dbErr) {
+        console.warn('DB delete failed, removing from memory store only:', dbErr);
+      }
+    }
+
+    // Remove from memory store
+    const ownerIdx = ownersStore.findIndex((o) => o.id === id);
+    if (ownerIdx >= 0) ownersStore.splice(ownerIdx, 1);
+
+    logAudit('superadmin', 'DELETE_OWNER', id, `Owner ${id}`, reason || 'Deleted by superadmin', req.ip || '127.0.0.1');
+    res.json({ success: true, message: 'Owner account deleted permanently', id });
+  } catch (error) {
+    console.error('Delete owner error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete owner' });
+  }
 };
 
 // ─── Devices ─────────────────────────────────────────────────────
@@ -478,33 +563,42 @@ export const getDevices = async (req: Request, res: Response): Promise<void> => 
 
     const { count, rows } = await Device.findAndCountAll({
       where,
+      include: [{ model: User, attributes: ['id', 'name', 'phone', 'username'] }],
       limit,
       offset: (page - 1) * limit,
       order: [['lastHeartbeat', 'DESC']],
     });
 
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const items = rows.map((d) => ({
-      id: d.deviceId,
-      device_name: `Receiver ${d.deviceId.substring(0, 8)}`,
-      owner_id: `own_${d.userId || 1}`,
-      owner_name: `Betting Owner #${d.userId || 1}`,
-      is_online: d.isActive && new Date(d.lastHeartbeat) >= fiveMinAgo,
-      is_revoked: !d.isActive,
-      last_heartbeat: d.lastHeartbeat,
-      battery_level: d.batteryLevel || 88,
-      queue_size: 0,
-      app_version: d.appVersion || '1.0.0',
-      sims: [
-        {
-          slot: 1,
-          carrier: 'Ethio Telecom',
-          phone_number: d.phoneNumber || '+251911002233',
-          iccid: d.simSerial || '892510000000001',
-          status: 'active',
-        },
-      ],
-    }));
+    const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const items = rows.map((d: any) => {
+      const u = d.User;
+      const ownerName =
+        u?.name || u?.username || (d.phoneNumber ? `Terminal (${d.phoneNumber})` : `Betting Owner #${d.userId || 1}`);
+      const ownerId = d.userId ? `own_${d.userId}` : 'own_1';
+      const isOnline = Boolean(d.isActive && d.lastHeartbeat && new Date(d.lastHeartbeat) >= twoMinAgo);
+
+      return {
+        id: d.deviceId,
+        device_name: `Receiver ${d.deviceId.substring(0, 8)}`,
+        owner_id: ownerId,
+        owner_name: ownerName,
+        is_online: isOnline,
+        is_revoked: !d.isActive,
+        last_heartbeat: d.lastHeartbeat,
+        battery_level: d.batteryLevel ?? 88,
+        queue_size: 0,
+        app_version: d.appVersion || '1.0.0',
+        sims: [
+          {
+            slot: 1,
+            carrier: 'Ethio Telecom',
+            phone_number: d.phoneNumber || u?.phone || '+251911002233',
+            iccid: d.simSerial || '892510000000001',
+            status: isOnline ? 'active' : 'idle',
+          },
+        ],
+      };
+    });
 
     res.json({
       items,
@@ -521,32 +615,40 @@ export const getDevices = async (req: Request, res: Response): Promise<void> => 
 export const getDeviceDetail = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const device = await Device.findByPk(id);
+    const device: any = await Device.findByPk(id, {
+      include: [{ model: User, attributes: ['id', 'name', 'phone', 'username'] }],
+    });
     const recentSms = await SmsLog.findAll({
       where: { deviceId: id },
       limit: 10,
       order: [['timestamp', 'DESC']],
     });
 
+    const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const isOnline = Boolean(device?.isActive && device?.lastHeartbeat && new Date(device.lastHeartbeat) >= twoMinAgo);
+    const u = device?.User;
+    const ownerName =
+      u?.name || u?.username || (device?.phoneNumber ? `Terminal (${device.phoneNumber})` : `Betting Owner #${device?.userId || 1}`);
+
     res.json({
       device: {
         id: device?.deviceId || id,
         device_name: `Receiver ${id.substring(0, 8)}`,
-        owner_id: `own_${device?.userId || 1}`,
-        owner_name: `Betting Owner #${device?.userId || 1}`,
-        is_online: device?.isActive || true,
+        owner_id: device?.userId ? `own_${device.userId}` : 'own_1',
+        owner_name: ownerName,
+        is_online: isOnline,
         is_revoked: !(device?.isActive ?? true),
         last_heartbeat: device?.lastHeartbeat || new Date().toISOString(),
-        battery_level: device?.batteryLevel || 90,
+        battery_level: device?.batteryLevel ?? 90,
         queue_size: 0,
         app_version: device?.appVersion || '1.0.0',
         sims: [
           {
             slot: 1,
             carrier: 'Ethio Telecom',
-            phone_number: device?.phoneNumber || '+251911002233',
+            phone_number: device?.phoneNumber || u?.phone || '+251911002233',
             iccid: device?.simSerial || '892510000000001',
-            status: 'active',
+            status: isOnline ? 'active' : 'idle',
           },
         ],
       },
@@ -559,7 +661,7 @@ export const getDeviceDetail = async (req: Request, res: Response): Promise<void
       })),
       heartbeat_history_24h: Array.from({ length: 24 }).map((_, i) => ({
         hour: `${i}:00`,
-        online: Math.random() > 0.1,
+        online: isOnline && i >= 20,
       })),
       sim_history: [],
     });

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.changePin = exports.register = exports.login = void 0;
+exports.checkUserExists = exports.createOwner = exports.changePin = exports.register = exports.login = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const models_1 = require("../models");
@@ -144,3 +144,96 @@ const changePin = async (req, res) => {
     }
 };
 exports.changePin = changePin;
+const createOwner = async (req, res) => {
+    try {
+        const { businessName, phone, password, pin, credit } = req.body;
+        if (!businessName || businessName.trim().length === 0) {
+            res.status(400).json({ success: false, message: 'Business name is required' });
+            return;
+        }
+        if (!phone || !PHONE_REGEX.test(phone)) {
+            res.status(400).json({
+                success: false,
+                message: 'Invalid phone number format. Must be +251 followed by 7 or 9 and 8 digits.',
+            });
+            return;
+        }
+        if (!password || password.length < 6) {
+            res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+            return;
+        }
+        if (!pin || !PIN_REGEX.test(pin)) {
+            res.status(400).json({ success: false, message: 'PIN must be exactly 4 digits' });
+            return;
+        }
+        if (!credit || isNaN(parseFloat(credit))) {
+            res.status(400).json({ success: false, message: 'Credit must be a valid number' });
+            return;
+        }
+        const existing = await models_1.User.findOne({ where: { phone } });
+        if (existing) {
+            res.status(400).json({ success: false, message: 'Phone number already registered' });
+            return;
+        }
+        const hashedPin = await bcrypt_1.default.hash(pin, BCRYPT_ROUNDS);
+        const hashedPassword = await bcrypt_1.default.hash(password, BCRYPT_ROUNDS);
+        await models_1.User.create({
+            businessName: businessName.trim(),
+            phone,
+            password: hashedPassword,
+            pin: hashedPin,
+            credit: parseFloat(credit),
+            role: 'owner',
+            isActive: true,
+        });
+        res.status(201).json({ success: true, message: 'Owner created successfully' });
+    }
+    catch (error) {
+        console.error('Create owner error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+exports.createOwner = createOwner;
+const checkUserExists = async (req, res) => {
+    try {
+        const { phone, deviceId } = req.body;
+        if (!phone || !PHONE_REGEX.test(phone)) {
+            res.status(400).json({
+                success: false,
+                message: 'Invalid phone number format.',
+            });
+            return;
+        }
+        const user = await models_1.User.findOne({
+            where: { phone, isActive: true },
+            attributes: ['id', 'phone', 'businessName'],
+        });
+        if (!user) {
+            res.json({ success: true, exists: false, message: 'User not found' });
+            return;
+        }
+        // Check if device is already registered to this user
+        let deviceRegistered = false;
+        if (deviceId) {
+            const device = await models_1.Device.findOne({
+                where: { deviceId, userId: user.id },
+            });
+            deviceRegistered = !!device;
+        }
+        res.json({
+            success: true,
+            exists: true,
+            deviceRegistered,
+            user: {
+                id: user.id,
+                phone: user.phone,
+                businessName: user.businessName,
+            },
+        });
+    }
+    catch (error) {
+        console.error('Check user exists error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+exports.checkUserExists = checkUserExists;

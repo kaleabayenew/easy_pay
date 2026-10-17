@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Device } from '../models';
+import { Device, User } from '../models';
 
 export const heartbeat = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -35,10 +35,19 @@ export const heartbeat = async (req: Request, res: Response): Promise<void> => {
 
     const batteryLevelNum = batteryLevel != null ? Number(batteryLevel) : null;
 
+    let matchedUserId: number | undefined;
+    if (phoneNumber) {
+      try {
+        const user = await User.findOne({ where: { phone: phoneNumber } });
+        if (user) matchedUserId = user.id;
+      } catch (_) {}
+    }
+
     const [device, created] = await Device.findOrCreate({
       where: { deviceId },
       defaults: {
         deviceId,
+        userId: matchedUserId,
         lastHeartbeat: ts,
         simSerial: simSerial || null,
         phoneNumber: phoneNumber || null,
@@ -61,10 +70,12 @@ export const heartbeat = async (req: Request, res: Response): Promise<void> => {
         networkType: networkType || device.networkType,
         appVersion: appVersion || device.appVersion,
       };
+      if (matchedUserId && !device.userId) {
+        updates.userId = matchedUserId;
+      }
       // Security policy: if rooted, deactivate automatically
       if (isRooted === true) updates.isActive = false;
       await device.update(updates);
-      // Reload to get the latest persisted values (isActive may have changed)
       await device.reload();
     }
 

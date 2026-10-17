@@ -7,6 +7,7 @@ import {
   createOwner,
   suspendOwner,
   reactivateOwner,
+  deleteOwner,
   getDevices,
   getDeviceDetail,
   revokeDevice,
@@ -59,6 +60,7 @@ router.get('/owners', getOwners);
 router.post('/owners', createOwner);
 router.post('/owners/:id/suspend', suspendOwner);
 router.post('/owners/:id/reactivate', reactivateOwner);
+router.delete('/owners/:id', deleteOwner);
 
 // Devices
 router.get('/devices', getDevices);

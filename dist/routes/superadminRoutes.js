@@ -22,6 +22,7 @@ router.get('/owners', superadminController_1.getOwners);
 router.post('/owners', superadminController_1.createOwner);
 router.post('/owners/:id/suspend', superadminController_1.suspendOwner);
 router.post('/owners/:id/reactivate', superadminController_1.reactivateOwner);
+router.delete('/owners/:id', superadminController_1.deleteOwner);
 // Devices
 router.get('/devices', superadminController_1.getDevices);
 router.get('/devices/:id', superadminController_1.getDeviceDetail);

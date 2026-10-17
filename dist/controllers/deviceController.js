@@ -13,10 +13,20 @@ const heartbeat = async (req, res) => {
             ? new Date(typeof timestamp === 'number' ? timestamp : parseInt(timestamp, 10))
             : new Date();
         const batteryLevelNum = batteryLevel != null ? Number(batteryLevel) : null;
+        let matchedUserId;
+        if (phoneNumber) {
+            try {
+                const user = await models_1.User.findOne({ where: { phone: phoneNumber } });
+                if (user)
+                    matchedUserId = user.id;
+            }
+            catch (_) { }
+        }
         const [device, created] = await models_1.Device.findOrCreate({
             where: { deviceId },
             defaults: {
                 deviceId,
+                userId: matchedUserId,
                 lastHeartbeat: ts,
                 simSerial: simSerial || null,
                 phoneNumber: phoneNumber || null,
@@ -38,11 +48,13 @@ const heartbeat = async (req, res) => {
                 networkType: networkType || device.networkType,
                 appVersion: appVersion || device.appVersion,
             };
+            if (matchedUserId && !device.userId) {
+                updates.userId = matchedUserId;
+            }
             // Security policy: if rooted, deactivate automatically
             if (isRooted === true)
                 updates.isActive = false;
             await device.update(updates);
-            // Reload to get the latest persisted values (isActive may have changed)
             await device.reload();
         }
         res.json({

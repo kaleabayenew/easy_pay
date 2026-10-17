@@ -46,7 +46,7 @@ const login = async (req, res) => {
                 res.status(401).json({ success: false, message: 'Account is inactive. Please contact support.' });
                 return;
             }
-            res.status(401).json({ success: false, message: 'Invalid credentials' });
+            res.status(401).json({ success: false, message: 'Phone number not registered' });
             return;
         }
         let isPinValid = false;
@@ -71,7 +71,7 @@ const login = async (req, res) => {
         }
         if (!isPinValid) {
             console.log('Login failed: Invalid PIN for phone:', phone);
-            res.status(401).json({ success: false, message: 'Invalid credentials' });
+            res.status(401).json({ success: false, message: 'Invalid PIN' });
             return;
         }
         if (!process.env.JWT_SECRET) {

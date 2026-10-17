@@ -47,7 +47,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         res.status(401).json({ success: false, message: 'Account is inactive. Please contact support.' });
         return;
       }
-      res.status(401).json({ success: false, message: 'Invalid credentials' });
+      res.status(401).json({ success: false, message: 'Phone number not registered' });
       return;
     }
 
@@ -72,7 +72,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     if (!isPinValid) {
       console.log('Login failed: Invalid PIN for phone:', phone);
-      res.status(401).json({ success: false, message: 'Invalid credentials' });
+      res.status(401).json({ success: false, message: 'Invalid PIN' });
       return;
     }
 

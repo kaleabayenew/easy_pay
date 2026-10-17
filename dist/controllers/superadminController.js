@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSmsAnalysis = exports.blockEntity = exports.unblockEntity = exports.getBlockedList = exports.resendOtpRequest = exports.getOtpRequests = exports.updateNotifications = exports.getNotifications = exports.revokeSession = exports.getSessions = exports.getProfile = exports.getReports = exports.getAuditLog = exports.updateLimits = exports.getLimits = exports.deleteWhitelist = exports.updateWhitelist = exports.addWhitelist = exports.getWhitelist = exports.wipeDevice = exports.revokeDevice = exports.getDeviceDetail = exports.getDevices = exports.deleteOwner = exports.reactivateOwner = exports.suspendOwner = exports.createOwner = exports.getOwnersWithApiKeys = exports.getOwners = exports.ownersStore = exports.getDashboard = exports.verifySession = exports.superadminLogin = void 0;
+exports.getSmsAnalysis = exports.blockEntity = exports.unblockEntity = exports.getBlockedList = exports.resendOtpRequest = exports.getOtpRequests = exports.updateNotifications = exports.getNotifications = exports.revokeSession = exports.getSessions = exports.getProfile = exports.getReports = exports.getAuditLog = exports.updateLimits = exports.getLimits = exports.deleteWhitelist = exports.updateWhitelist = exports.addWhitelist = exports.getWhitelist = exports.wipeDevice = exports.revokeDevice = exports.getDeviceDetail = exports.getDevices = exports.deleteOwner = exports.reactivateOwner = exports.suspendOwner = exports.createOwner = exports.getOwnerLiveRequests = exports.toggleApiKeyStatus = exports.getOwnersWithApiKeys = exports.getOwners = exports.ownersStore = exports.getDashboard = exports.verifySession = exports.superadminLogin = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const models_1 = require("../models");
 const sequelize_1 = require("sequelize");
@@ -359,6 +359,8 @@ const getOwnersWithApiKeys = async (req, res) => {
                 isActive: u.isActive,
                 apiKey: apiKey?.keyPrefix || null,
                 keyPrefix: apiKey?.keyPrefix || null,
+                apiKeyId: apiKey?.id || null,
+                isApiKeyActive: apiKey?.isActive || false,
                 totalRequests: stats.totalRequests,
                 totalResponses: stats.totalResponses,
                 done: stats.done,
@@ -387,6 +389,79 @@ const getOwnersWithApiKeys = async (req, res) => {
     }
 };
 exports.getOwnersWithApiKeys = getOwnersWithApiKeys;
+const toggleApiKeyStatus = async (req, res) => {
+    try {
+        const { ownerId, action } = req.body;
+        if (!ownerId || !action) {
+            res.status(400).json({ success: false, message: 'Missing required fields' });
+            return;
+        }
+        const apiKey = await models_1.ApiKey.findOne({
+            where: { ownerId: parseInt(ownerId) },
+        });
+        if (!apiKey) {
+            res.status(404).json({ success: false, message: 'API key not found' });
+            return;
+        }
+        if (action === 'stop') {
+            await apiKey.update({ isActive: false });
+        }
+        else if (action === 'resume') {
+            await apiKey.update({ isActive: true });
+        }
+        else if (action === 'regenerate') {
+            const crypto = require('crypto');
+            const keyPrefix = 'easypay_';
+            const randomPart = crypto.randomBytes(24).toString('hex');
+            const newApiKey = `${keyPrefix}${randomPart}`;
+            await apiKey.update({ apiKey: newApiKey, isActive: true });
+        }
+        res.json({
+            success: true,
+            message: `API key ${action}d successfully`,
+            keyPrefix: apiKey.keyPrefix,
+            isActive: apiKey.isActive,
+        });
+    }
+    catch (error) {
+        console.error('Toggle API key status error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update API key' });
+    }
+};
+exports.toggleApiKeyStatus = toggleApiKeyStatus;
+const getOwnerLiveRequests = async (req, res) => {
+    try {
+        const { ownerId } = req.params;
+        const verifications = await models_1.TransactionVerification.findAll({
+            where: { ownerId: parseInt(ownerId) },
+            order: [['createdAt', 'DESC']],
+            limit: 20,
+        });
+        const items = verifications.map((v) => ({
+            id: v.id,
+            transactionId: v.transactionId,
+            amount: v.amount,
+            method: v.method,
+            status: v.status,
+            apiRequestReceivedAt: v.apiRequestReceivedAt,
+            smsReceivedAt: v.smsReceivedAt,
+            matchedAt: v.matchedAt,
+            smsTransactionId: v.smsTransactionId,
+            smsAmount: v.smsAmount,
+            smsMethod: v.smsMethod,
+        }));
+        res.json({
+            success: true,
+            items,
+            total: items.length,
+        });
+    }
+    catch (error) {
+        console.error('Get owner live requests error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch live requests' });
+    }
+};
+exports.getOwnerLiveRequests = getOwnerLiveRequests;
 const createOwner = async (req, res) => {
     try {
         const { name, contact_email, contact_phone, initial_admin_username, temporary_password, password, pin, mobile_pin, } = req.body;

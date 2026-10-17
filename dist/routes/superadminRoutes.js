@@ -26,6 +26,8 @@ router.get('/verifications/:id', auth_1.authenticate, superadminTransactionContr
 // Owners
 router.get('/owners', superadminController_1.getOwners);
 router.get('/owners/api-keys', superadminController_1.getOwnersWithApiKeys);
+router.post('/owners/api-keys/toggle', superadminController_1.toggleApiKeyStatus);
+router.get('/owners/:id/live-requests', superadminController_1.getOwnerLiveRequests);
 router.post('/owners', superadminController_1.createOwner);
 router.post('/owners/:id/suspend', superadminController_1.suspendOwner);
 router.post('/owners/:id/reactivate', superadminController_1.reactivateOwner);

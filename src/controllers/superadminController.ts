@@ -428,6 +428,8 @@ export const getOwnersWithApiKeys = async (req: Request, res: Response): Promise
         isActive: u.isActive,
         apiKey: apiKey?.keyPrefix || null,
         keyPrefix: apiKey?.keyPrefix || null,
+        apiKeyId: apiKey?.id || null,
+        isApiKeyActive: apiKey?.isActive || false,
         totalRequests: stats.totalRequests,
         totalResponses: stats.totalResponses,
         done: stats.done,
@@ -453,6 +455,83 @@ export const getOwnersWithApiKeys = async (req: Request, res: Response): Promise
   } catch (error) {
     console.error('Get owners with API keys error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch owners' });
+  }
+};
+
+export const toggleApiKeyStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { ownerId, action } = req.body as { ownerId: string; action: 'stop' | 'resume' | 'regenerate' };
+
+    if (!ownerId || !action) {
+      res.status(400).json({ success: false, message: 'Missing required fields' });
+      return;
+    }
+
+    const apiKey = await ApiKey.findOne({
+      where: { ownerId: parseInt(ownerId) },
+    });
+
+    if (!apiKey) {
+      res.status(404).json({ success: false, message: 'API key not found' });
+      return;
+    }
+
+    if (action === 'stop') {
+      await apiKey.update({ isActive: false });
+    } else if (action === 'resume') {
+      await apiKey.update({ isActive: true });
+    } else if (action === 'regenerate') {
+      const crypto = require('crypto');
+      const keyPrefix = 'easypay_';
+      const randomPart = crypto.randomBytes(24).toString('hex');
+      const newApiKey = `${keyPrefix}${randomPart}`;
+      await apiKey.update({ apiKey: newApiKey, isActive: true });
+    }
+
+    res.json({
+      success: true,
+      message: `API key ${action}d successfully`,
+      keyPrefix: apiKey.keyPrefix,
+      isActive: apiKey.isActive,
+    });
+  } catch (error) {
+    console.error('Toggle API key status error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update API key' });
+  }
+};
+
+export const getOwnerLiveRequests = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { ownerId } = req.params;
+
+    const verifications = await TransactionVerification.findAll({
+      where: { ownerId: parseInt(ownerId) },
+      order: [['createdAt', 'DESC']],
+      limit: 20,
+    });
+
+    const items = verifications.map((v) => ({
+      id: v.id,
+      transactionId: v.transactionId,
+      amount: v.amount,
+      method: v.method,
+      status: v.status,
+      apiRequestReceivedAt: v.apiRequestReceivedAt,
+      smsReceivedAt: v.smsReceivedAt,
+      matchedAt: v.matchedAt,
+      smsTransactionId: v.smsTransactionId,
+      smsAmount: v.smsAmount,
+      smsMethod: v.smsMethod,
+    }));
+
+    res.json({
+      success: true,
+      items,
+      total: items.length,
+    });
+  } catch (error) {
+    console.error('Get owner live requests error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch live requests' });
   }
 };
 

@@ -26,7 +26,7 @@ const login = async (req, res) => {
         }
         const user = await models_1.User.findOne({
             where: { phone, isActive: true },
-            attributes: ['id', 'phone', 'pin', 'role', 'isActive'],
+            attributes: ['id', 'phone', 'pin', 'role', 'isActive', 'businessName'],
         });
         if (!user) {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -70,6 +70,7 @@ const login = async (req, res) => {
             token,
             deviceId: deviceId || null,
             phone: user.phone,
+            user: { businessName: user.businessName || null },
             expiresAt: Date.now() + expiresInSeconds * 1000,
         });
     }

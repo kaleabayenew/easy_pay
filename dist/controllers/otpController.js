@@ -340,10 +340,19 @@ const verifyOtp = async (req, res) => {
         const effectivePhone = cleanPhone || otpRecord.phone;
         // Safely update or create device in database
         try {
+            // Find user to link userId to the device
+            let linkedUserId;
+            try {
+                const linkedUser = await models_1.User.findOne({ where: { phone: effectivePhone } });
+                if (linkedUser)
+                    linkedUserId = linkedUser.id;
+            }
+            catch (_) { }
             const [device] = await models_1.Device.findOrCreate({
                 where: { deviceId: effectiveDeviceId },
                 defaults: {
                     deviceId: effectiveDeviceId,
+                    userId: linkedUserId,
                     phoneNumber: effectivePhone,
                     registeredAt: new Date(),
                     lastHeartbeat: new Date(),
@@ -351,7 +360,12 @@ const verifyOtp = async (req, res) => {
                     isRooted: false,
                 },
             });
-            await device.update({ isActive: true, lastHeartbeat: new Date(), phoneNumber: effectivePhone });
+            await device.update({
+                isActive: true,
+                lastHeartbeat: new Date(),
+                phoneNumber: effectivePhone,
+                ...(linkedUserId && !device.userId ? { userId: linkedUserId } : {}),
+            });
         }
         catch (dbErr) {
             console.warn('Device DB sync warning (non-fatal):', dbErr);

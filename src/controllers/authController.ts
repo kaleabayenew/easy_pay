@@ -25,7 +25,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const user = await User.findOne({
       where: { phone, isActive: true },
-      attributes: ['id', 'phone', 'pin', 'role', 'isActive'],
+      attributes: ['id', 'phone', 'pin', 'role', 'isActive', 'businessName'],
     });
     if (!user) {
       res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -77,6 +77,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       token,
       deviceId: deviceId || null,
       phone: user.phone,
+      user: { businessName: user.businessName || null },
       expiresAt: Date.now() + expiresInSeconds * 1000,
     });
   } catch (error) {

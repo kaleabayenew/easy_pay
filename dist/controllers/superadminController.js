@@ -415,6 +415,13 @@ const toggleApiKeyStatus = async (req, res) => {
             const randomPart = crypto.randomBytes(24).toString('hex');
             const newApiKey = `${keyPrefix}${randomPart}`;
             await apiKey.update({ apiKey: newApiKey, isActive: true });
+            res.json({
+                success: true,
+                message: 'API key regenerated successfully',
+                keyPrefix: apiKey.keyPrefix,
+                isActive: true,
+                fullApiKey: newApiKey, // Return full key only during generation
+            });
         }
         res.json({
             success: true,

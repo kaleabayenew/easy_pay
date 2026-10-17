@@ -34,7 +34,6 @@ export const verifyTransaction = async (req: Request, res: Response): Promise<vo
     // Find API key
     const apiKey = await ApiKey.findOne({
       where: { apiKey: apiKeyHeader, isActive: true },
-      include: [{ model: User, as: 'owner', where: { isActive: true } }],
     });
 
     if (!apiKey) {
@@ -42,7 +41,11 @@ export const verifyTransaction = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const owner = apiKey.owner;
+    // Find owner
+    const owner = await User.findOne({
+      where: { id: apiKey.ownerId, isActive: true },
+    });
+
     if (!owner) {
       res.status(401).json({ success: false, message: 'Owner not found or inactive' });
       return;

@@ -8,6 +8,7 @@ const authController_1 = require("../controllers/authController");
 const otpController_1 = require("../controllers/otpController");
 const smsController_1 = require("../controllers/smsController");
 const deviceController_1 = require("../controllers/deviceController");
+const transactionController_1 = require("../controllers/transactionController");
 const auth_1 = require("../middleware/auth");
 const rateLimit_1 = require("../middleware/rateLimit");
 const superadminRoutes_1 = __importDefault(require("./superadminRoutes"));
@@ -34,4 +35,7 @@ router.post('/device/register', auth_1.authenticate, deviceController_1.register
 router.get('/devices', auth_1.authenticate, deviceController_1.listDevices);
 router.get('/devices/:deviceId', auth_1.authenticate, deviceController_1.getDeviceStatus);
 router.post('/devices/:deviceId/deactivate', auth_1.authenticate, auth_1.verifyHmac, deviceController_1.deactivateDevice);
+// Transaction verification routes (public with API key)
+router.post('/verify-transaction', transactionController_1.verifyTransaction);
+router.get('/verify-transaction/:verificationId', transactionController_1.getVerificationStatus);
 exports.default = router;

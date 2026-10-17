@@ -3,6 +3,7 @@ import { login, register, changePin, createOwner, checkUserExists, checkDeviceEx
 import { requestOtp, verifyOtp } from '../controllers/otpController';
 import { receiveSms, getSmsLogs, retrySms, deleteSms } from '../controllers/smsController';
 import { heartbeat, getDeviceStatus, listDevices, deactivateDevice, registerDevice } from '../controllers/deviceController';
+import { verifyTransaction, getVerificationStatus } from '../controllers/transactionController';
 import { authenticate, verifyHmac } from '../middleware/auth';
 import { loginRateLimit, smsRateLimit } from '../middleware/rateLimit';
 
@@ -35,5 +36,9 @@ router.post('/device/register', authenticate, registerDevice);
 router.get('/devices', authenticate, listDevices);
 router.get('/devices/:deviceId', authenticate, getDeviceStatus);
 router.post('/devices/:deviceId/deactivate', authenticate, verifyHmac, deactivateDevice);
+
+// Transaction verification routes (public with API key)
+router.post('/verify-transaction', verifyTransaction);
+router.get('/verify-transaction/:verificationId', getVerificationStatus);
 
 export default router;

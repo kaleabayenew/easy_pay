@@ -6,10 +6,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkUserExists = exports.checkDeviceExists = exports.createOwner = exports.changePin = exports.register = exports.login = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const crypto_1 = __importDefault(require("crypto"));
 const models_1 = require("../models");
 const PHONE_REGEX = /^\+251[79]\d{8}$/;
 const PIN_REGEX = /^\d{4}$/;
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+// Helper function to generate API key
+const generateApiKey = () => {
+    const keyPrefix = 'easypay_';
+    const randomPart = crypto_1.default.randomBytes(24).toString('hex');
+    const apiKey = `${keyPrefix}${randomPart}`;
+    return { apiKey, keyPrefix };
+};
 const login = async (req, res) => {
     try {
         const { phone, pin, deviceId } = req.body;
@@ -178,7 +186,7 @@ const createOwner = async (req, res) => {
         }
         const hashedPin = await bcrypt_1.default.hash(pin, BCRYPT_ROUNDS);
         const hashedPassword = await bcrypt_1.default.hash(password, BCRYPT_ROUNDS);
-        await models_1.User.create({
+        const owner = await models_1.User.create({
             businessName: businessName.trim(),
             phone,
             password: hashedPassword,
@@ -187,7 +195,20 @@ const createOwner = async (req, res) => {
             role: 'owner',
             isActive: true,
         });
-        res.status(201).json({ success: true, message: 'Owner created successfully' });
+        // Generate API key for the new owner
+        const { apiKey, keyPrefix } = generateApiKey();
+        await models_1.ApiKey.create({
+            ownerId: owner.id,
+            apiKey,
+            keyPrefix,
+            isActive: true,
+        });
+        res.status(201).json({
+            success: true,
+            message: 'Owner created successfully',
+            apiKey, // Return API key only once during creation
+            keyPrefix,
+        });
     }
     catch (error) {
         console.error('Create owner error:', error);

@@ -1,11 +1,20 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { User, Device } from '../models';
+import crypto from 'crypto';
+import { User, Device, ApiKey } from '../models';
 
 const PHONE_REGEX = /^\+251[79]\d{8}$/;
 const PIN_REGEX = /^\d{4}$/;
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+
+// Helper function to generate API key
+const generateApiKey = (): { apiKey: string; keyPrefix: string } => {
+  const keyPrefix = 'easypay_';
+  const randomPart = crypto.randomBytes(24).toString('hex');
+  const apiKey = `${keyPrefix}${randomPart}`;
+  return { apiKey, keyPrefix };
+};
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -202,7 +211,7 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
     const hashedPin = await bcrypt.hash(pin, BCRYPT_ROUNDS);
     const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    await User.create({
+    const owner = await User.create({
       businessName: businessName.trim(),
       phone,
       password: hashedPassword,
@@ -212,7 +221,21 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
       isActive: true,
     });
 
-    res.status(201).json({ success: true, message: 'Owner created successfully' });
+    // Generate API key for the new owner
+    const { apiKey, keyPrefix } = generateApiKey();
+    await ApiKey.create({
+      ownerId: owner.id,
+      apiKey,
+      keyPrefix,
+      isActive: true,
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Owner created successfully',
+      apiKey, // Return API key only once during creation
+      keyPrefix,
+    });
   } catch (error) {
     console.error('Create owner error:', error);
     res.status(500).json({ success: false, message: 'Server error' });

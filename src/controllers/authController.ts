@@ -38,6 +38,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       attributes: ['id', 'phone', 'pin', 'role', 'isActive', 'businessName'],
     });
     if (!user) {
+      // Check if user exists but is inactive
+      const inactiveUser = await User.findOne({
+        where: { phone },
+        attributes: ['id', 'phone', 'isActive'],
+      });
+      if (inactiveUser) {
+        res.status(401).json({ success: false, message: 'Account is inactive. Please contact support.' });
+        return;
+      }
       res.status(401).json({ success: false, message: 'Invalid credentials' });
       return;
     }
@@ -45,13 +54,16 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     let isPinValid = false;
     if (user.pin && (user.pin.startsWith('$2a$') || user.pin.startsWith('$2b$'))) {
       isPinValid = await bcrypt.compare(pin, user.pin);
+      console.log('Login attempt (hashed PIN):', { phone, isPinValid });
     } else {
       isPinValid = (pin === user.pin);
+      console.log('Login attempt (plaintext PIN):', { phone, isPinValid, hasPin: !!user.pin });
       if (isPinValid) {
         // Upgrade legacy plaintext pin to secure bcrypt hash
         try {
           const hashed = await bcrypt.hash(pin, BCRYPT_ROUNDS);
           await user.update({ pin: hashed });
+          console.log('PIN upgraded to bcrypt for user:', phone);
         } catch (e) {
           console.error('Failed to auto-hash legacy PIN:', e);
         }
@@ -59,6 +71,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (!isPinValid) {
+      console.log('Login failed: Invalid PIN for phone:', phone);
       res.status(401).json({ success: false, message: 'Invalid credentials' });
       return;
     }

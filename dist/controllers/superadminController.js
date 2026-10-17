@@ -75,8 +75,8 @@ const superadminLogin = async (req, res) => {
                     res.status(401).json({ success: false, message: 'Invalid password for superadmin kaleab' });
                     return;
                 }
-                if (codeStr && codeStr !== '1315' && codeStr !== '123456') {
-                    res.status(400).json({ success: false, message: 'Invalid 2FA code. Please use 1315' });
+                if (codeStr && codeStr !== '131513' && codeStr !== '123456') {
+                    res.status(400).json({ success: false, message: 'Invalid 2FA code. Please use 131513' });
                     return;
                 }
             }

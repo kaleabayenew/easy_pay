@@ -27,6 +27,7 @@ router.post('/sms/:id/retry', auth_1.authenticate, smsController_1.retrySms);
 router.delete('/sms/:id', auth_1.authenticate, smsController_1.deleteSms);
 // Device / heartbeat routes
 router.post('/heartbeat', auth_1.verifyHmac, deviceController_1.heartbeat);
+router.post('/device/register', auth_1.authenticate, deviceController_1.registerDevice);
 router.get('/devices', auth_1.authenticate, deviceController_1.listDevices);
 router.get('/devices/:deviceId', auth_1.authenticate, deviceController_1.getDeviceStatus);
 router.post('/devices/:deviceId/deactivate', auth_1.authenticate, auth_1.verifyHmac, deviceController_1.deactivateDevice);

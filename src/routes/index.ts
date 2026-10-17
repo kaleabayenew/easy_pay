@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { login, register, changePin } from '../controllers/authController';
 import { requestOtp, verifyOtp } from '../controllers/otpController';
 import { receiveSms, getSmsLogs, retrySms, deleteSms } from '../controllers/smsController';
-import { heartbeat, getDeviceStatus, listDevices, deactivateDevice } from '../controllers/deviceController';
+import { heartbeat, getDeviceStatus, listDevices, deactivateDevice, registerDevice } from '../controllers/deviceController';
 import { authenticate, verifyHmac } from '../middleware/auth';
 import { loginRateLimit, smsRateLimit } from '../middleware/rateLimit';
 
@@ -28,6 +28,7 @@ router.delete('/sms/:id', authenticate, deleteSms);
 
 // Device / heartbeat routes
 router.post('/heartbeat', verifyHmac, heartbeat);
+router.post('/device/register', authenticate, registerDevice);
 router.get('/devices', authenticate, listDevices);
 router.get('/devices/:deviceId', authenticate, getDeviceStatus);
 router.post('/devices/:deviceId/deactivate', authenticate, verifyHmac, deactivateDevice);

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deactivateDevice = exports.listDevices = exports.getDeviceStatus = exports.heartbeat = void 0;
+exports.registerDevice = exports.deactivateDevice = exports.listDevices = exports.getDeviceStatus = exports.heartbeat = void 0;
 const models_1 = require("../models");
 const heartbeat = async (req, res) => {
     try {
@@ -118,3 +118,46 @@ const deactivateDevice = async (req, res) => {
     }
 };
 exports.deactivateDevice = deactivateDevice;
+const registerDevice = async (req, res) => {
+    try {
+        const { deviceId, phone } = req.body;
+        if (!deviceId) {
+            res.status(400).json({ success: false, message: 'Missing deviceId' });
+            return;
+        }
+        if (!phone) {
+            res.status(400).json({ success: false, message: 'Missing phone number' });
+            return;
+        }
+        // Find or create device
+        const [device, created] = await models_1.Device.findOrCreate({
+            where: { deviceId },
+            defaults: {
+                deviceId,
+                phoneNumber: phone,
+                isActive: true,
+                isRooted: false,
+                registeredAt: new Date(),
+                lastHeartbeat: new Date(),
+            },
+        });
+        if (!created) {
+            // Update existing device
+            await device.update({
+                phoneNumber: phone,
+                isActive: true,
+                lastHeartbeat: new Date(),
+            });
+        }
+        res.json({
+            success: true,
+            message: created ? 'Device registered successfully' : 'Device updated successfully',
+            data: device,
+        });
+    }
+    catch (error) {
+        console.error('Register device error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+exports.registerDevice = registerDevice;

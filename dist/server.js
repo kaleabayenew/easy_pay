@@ -32,6 +32,72 @@ app.use((0, cors_1.default)({
 // Body parsing with size limit to prevent large payload attacks
 app.use(express_1.default.json({ limit: '10kb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10kb' }));
+app.get('/', (_req, res) => {
+    res.json({
+        name: 'EasyPay SMS Monitor API',
+        version: '1.0.0',
+        description: 'REST API for authentication, device management, and SMS monitoring.',
+        healthCheck: '/health',
+        apiBase: '/api/v1',
+        authentication: {
+            bearerToken: 'Send protected requests with the Authorization: Bearer <token> header.',
+            hmac: 'Device requests requiring HMAC use X-Signature, X-Device-Id, and X-Timestamp headers.',
+        },
+        endpoints: {
+            auth: [
+                'POST /api/v1/auth/login',
+                'POST /api/v1/auth/register',
+                'POST /api/v1/auth/change-pin',
+                'POST /api/v1/auth/request-otp',
+                'POST /api/v1/auth/verify-otp',
+            ],
+            sms: [
+                'POST /api/v1/sms',
+                'GET /api/v1/sms/logs/:deviceId',
+                'POST /api/v1/sms/:id/retry',
+                'DELETE /api/v1/sms/:id',
+            ],
+            devices: [
+                'POST /api/v1/heartbeat',
+                'GET /api/v1/devices',
+                'GET /api/v1/devices/:deviceId',
+                'POST /api/v1/devices/:deviceId/deactivate',
+            ],
+            superadmin: [
+                'POST /api/v1/superadmin/login',
+                'GET /api/v1/superadmin/verify-session',
+                'GET /api/v1/superadmin/dashboard',
+                'GET /api/v1/superadmin/otp-requests',
+                'POST /api/v1/superadmin/otp-requests/:id/resend',
+                'GET /api/v1/superadmin/blocked',
+                'POST /api/v1/superadmin/blocked',
+                'POST /api/v1/superadmin/blocked/:id/unblock',
+                'GET /api/v1/superadmin/analysis/sms',
+                'GET /api/v1/superadmin/owners',
+                'POST /api/v1/superadmin/owners',
+                'POST /api/v1/superadmin/owners/:id/suspend',
+                'POST /api/v1/superadmin/owners/:id/reactivate',
+                'GET /api/v1/superadmin/devices',
+                'GET /api/v1/superadmin/devices/:id',
+                'POST /api/v1/superadmin/devices/:id/revoke',
+                'POST /api/v1/superadmin/devices/:id/wipe',
+                'GET /api/v1/superadmin/whitelist',
+                'POST /api/v1/superadmin/whitelist',
+                'PUT /api/v1/superadmin/whitelist/:id',
+                'DELETE /api/v1/superadmin/whitelist/:id',
+                'GET /api/v1/superadmin/limits',
+                'PUT /api/v1/superadmin/limits',
+                'GET /api/v1/superadmin/audit-log',
+                'GET /api/v1/superadmin/reports',
+                'GET /api/v1/superadmin/settings/profile',
+                'GET /api/v1/superadmin/settings/sessions',
+                'DELETE /api/v1/superadmin/settings/sessions/:id',
+                'GET /api/v1/superadmin/settings/notifications',
+                'PUT /api/v1/superadmin/settings/notifications',
+            ],
+        },
+    });
+});
 // Health check (no auth)
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });

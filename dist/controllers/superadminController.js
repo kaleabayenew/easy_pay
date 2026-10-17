@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSmsAnalysis = exports.blockEntity = exports.unblockEntity = exports.getBlockedList = exports.resendOtpRequest = exports.getOtpRequests = exports.updateNotifications = exports.getNotifications = exports.revokeSession = exports.getSessions = exports.getProfile = exports.getReports = exports.getAuditLog = exports.updateLimits = exports.getLimits = exports.deleteWhitelist = exports.updateWhitelist = exports.addWhitelist = exports.getWhitelist = exports.wipeDevice = exports.revokeDevice = exports.getDeviceDetail = exports.getDevices = exports.deleteOwner = exports.reactivateOwner = exports.suspendOwner = exports.createOwner = exports.getOwners = exports.ownersStore = exports.getDashboard = exports.verifySession = exports.superadminLogin = void 0;
+exports.getSmsAnalysis = exports.blockEntity = exports.unblockEntity = exports.getBlockedList = exports.resendOtpRequest = exports.getOtpRequests = exports.updateNotifications = exports.getNotifications = exports.revokeSession = exports.getSessions = exports.getProfile = exports.getReports = exports.getAuditLog = exports.updateLimits = exports.getLimits = exports.deleteWhitelist = exports.updateWhitelist = exports.addWhitelist = exports.getWhitelist = exports.wipeDevice = exports.revokeDevice = exports.getDeviceDetail = exports.getDevices = exports.deleteOwner = exports.reactivateOwner = exports.suspendOwner = exports.createOwner = exports.getOwnersWithApiKeys = exports.getOwners = exports.ownersStore = exports.getDashboard = exports.verifySession = exports.superadminLogin = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const models_1 = require("../models");
 const sequelize_1 = require("sequelize");
@@ -299,6 +299,94 @@ const getOwners = async (req, res) => {
     }
 };
 exports.getOwners = getOwners;
+const getOwnersWithApiKeys = async (req, res) => {
+    try {
+        const statusFilter = (req.query.status || '').toLowerCase().trim();
+        // Query DB users with their API keys
+        const users = await models_1.User.findAll({
+            include: [
+                {
+                    model: models_1.ApiKey,
+                    as: 'apiKeys',
+                    attributes: ['id', 'keyPrefix', 'isActive', 'lastUsedAt'],
+                },
+            ],
+            order: [['createdAt', 'DESC']],
+        });
+        // Get verification statistics for each owner
+        const ownerStats = new Map();
+        const verifications = await models_1.TransactionVerification.findAll({
+            attributes: ['ownerId', 'status'],
+        });
+        for (const v of verifications) {
+            if (!ownerStats.has(v.ownerId)) {
+                ownerStats.set(v.ownerId, {
+                    totalRequests: 0,
+                    totalResponses: 0,
+                    done: 0,
+                    failed: 0,
+                    rejected: 0,
+                });
+            }
+            const stats = ownerStats.get(v.ownerId);
+            stats.totalRequests++;
+            if (v.status === 'matched') {
+                stats.done++;
+                stats.totalResponses++;
+            }
+            else if (v.status === 'mismatched') {
+                stats.rejected++;
+                stats.totalResponses++;
+            }
+            else if (v.status === 'expired') {
+                stats.failed++;
+                stats.totalResponses++;
+            }
+        }
+        const items = users.map((u) => {
+            const apiKey = u.apiKeys?.[0];
+            const stats = ownerStats.get(u.id) || {
+                totalRequests: 0,
+                totalResponses: 0,
+                done: 0,
+                failed: 0,
+                rejected: 0,
+            };
+            return {
+                id: u.id.toString(),
+                name: u.businessName || `Owner #${u.id}`,
+                phone: u.phone,
+                isActive: u.isActive,
+                apiKey: apiKey?.keyPrefix || null,
+                keyPrefix: apiKey?.keyPrefix || null,
+                totalRequests: stats.totalRequests,
+                totalResponses: stats.totalResponses,
+                done: stats.done,
+                failed: stats.failed,
+                rejected: stats.rejected,
+                createdAt: u.createdAt?.toISOString(),
+            };
+        });
+        // Apply status filter
+        let filteredItems = items;
+        if (statusFilter === 'active') {
+            filteredItems = items.filter((o) => o.isActive);
+        }
+        else if (statusFilter === 'deactive') {
+            filteredItems = items.filter((o) => !o.isActive);
+        }
+        res.json({
+            success: true,
+            items: filteredItems,
+            total: filteredItems.length,
+        });
+    }
+    catch (error) {
+        console.error('Get owners with API keys error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch owners' });
+    }
+};
+exports.getOwnersWithApiKeys = getOwnersWithApiKeys;
 const createOwner = async (req, res) => {
     try {
         const { name, contact_email, contact_phone, initial_admin_username, temporary_password, password, pin, mobile_pin, } = req.body;

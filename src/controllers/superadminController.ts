@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { Device, SmsLog, User, ApiKey } from '../models';
+import { Device, SmsLog, User, ApiKey, TransactionVerification } from '../models';
 import { Op } from 'sequelize';
 
 // In-memory persistent state for config that doesn't have a dedicated table yet
@@ -361,6 +361,97 @@ export const getOwners = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Get owners error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch owners' });
+  }
+};
+
+export const getOwnersWithApiKeys = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const statusFilter = (req.query.status as string || '').toLowerCase().trim();
+
+    // Query DB users with their API keys
+    const users = await User.findAll({
+      include: [
+        {
+          model: ApiKey,
+          as: 'apiKeys',
+          attributes: ['id', 'keyPrefix', 'isActive', 'lastUsedAt'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Get verification statistics for each owner
+    const ownerStats = new Map<number, any>();
+    const verifications = await TransactionVerification.findAll({
+      attributes: ['ownerId', 'status'],
+    });
+
+    for (const v of verifications) {
+      if (!ownerStats.has(v.ownerId)) {
+        ownerStats.set(v.ownerId, {
+          totalRequests: 0,
+          totalResponses: 0,
+          done: 0,
+          failed: 0,
+          rejected: 0,
+        });
+      }
+      const stats = ownerStats.get(v.ownerId)!;
+      stats.totalRequests++;
+      if (v.status === 'matched') {
+        stats.done++;
+        stats.totalResponses++;
+      } else if (v.status === 'mismatched') {
+        stats.rejected++;
+        stats.totalResponses++;
+      } else if (v.status === 'expired') {
+        stats.failed++;
+        stats.totalResponses++;
+      }
+    }
+
+    const items = users.map((u) => {
+      const apiKey = (u as any).apiKeys?.[0];
+      const stats = ownerStats.get(u.id) || {
+        totalRequests: 0,
+        totalResponses: 0,
+        done: 0,
+        failed: 0,
+        rejected: 0,
+      };
+
+      return {
+        id: u.id.toString(),
+        name: u.businessName || `Owner #${u.id}`,
+        phone: u.phone,
+        isActive: u.isActive,
+        apiKey: apiKey?.keyPrefix || null,
+        keyPrefix: apiKey?.keyPrefix || null,
+        totalRequests: stats.totalRequests,
+        totalResponses: stats.totalResponses,
+        done: stats.done,
+        failed: stats.failed,
+        rejected: stats.rejected,
+        createdAt: u.createdAt?.toISOString(),
+      };
+    });
+
+    // Apply status filter
+    let filteredItems = items;
+    if (statusFilter === 'active') {
+      filteredItems = items.filter((o) => o.isActive);
+    } else if (statusFilter === 'deactive') {
+      filteredItems = items.filter((o) => !o.isActive);
+    }
+
+    res.json({
+      success: true,
+      items: filteredItems,
+      total: filteredItems.length,
+    });
+  } catch (error) {
+    console.error('Get owners with API keys error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch owners' });
   }
 };

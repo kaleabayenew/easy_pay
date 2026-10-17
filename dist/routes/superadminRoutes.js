@@ -25,6 +25,7 @@ router.get('/verifications/stats', auth_1.authenticate, superadminTransactionCon
 router.get('/verifications/:id', auth_1.authenticate, superadminTransactionController_1.getVerificationById);
 // Owners
 router.get('/owners', superadminController_1.getOwners);
+router.get('/owners/api-keys', superadminController_1.getOwnersWithApiKeys);
 router.post('/owners', superadminController_1.createOwner);
 router.post('/owners/:id/suspend', superadminController_1.suspendOwner);
 router.post('/owners/:id/reactivate', superadminController_1.reactivateOwner);

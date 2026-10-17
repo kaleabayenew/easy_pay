@@ -4,6 +4,7 @@ import {
   verifySession,
   getDashboard,
   getOwners,
+  getOwnersWithApiKeys,
   createOwner,
   suspendOwner,
   reactivateOwner,
@@ -67,6 +68,7 @@ router.get('/verifications/:id', authenticate, getVerificationById);
 
 // Owners
 router.get('/owners', getOwners);
+router.get('/owners/api-keys', getOwnersWithApiKeys);
 router.post('/owners', createOwner);
 router.post('/owners/:id/suspend', suspendOwner);
 router.post('/owners/:id/reactivate', reactivateOwner);

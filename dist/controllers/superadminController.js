@@ -444,7 +444,10 @@ const deleteOwner = async (req, res) => {
         const numericId = id.replace(/^own_/, '');
         if (/^\d+$/.test(numericId)) {
             try {
-                await models_1.User.destroy({ where: { id: parseInt(numericId) } });
+                const userIdNum = parseInt(numericId, 10);
+                await models_1.Device.update({ userId: null }, { where: { userId: userIdNum } });
+                await ApiKey.destroy({ where: { ownerId: userIdNum } });
+                await models_1.User.destroy({ where: { id: userIdNum } });
             }
             catch (dbErr) {
                 console.warn('DB delete failed, removing from memory store only:', dbErr);

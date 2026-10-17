@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { Device, SmsLog, User } from '../models';
+import { Device, SmsLog, User, ApiKey } from '../models';
 import { Op } from 'sequelize';
 
 // In-memory persistent state for config that doesn't have a dedicated table yet

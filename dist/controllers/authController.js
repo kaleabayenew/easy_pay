@@ -40,7 +40,23 @@ const login = async (req, res) => {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
             return;
         }
-        const isPinValid = await bcrypt_1.default.compare(pin, user.pin);
+        let isPinValid = false;
+        if (user.pin && (user.pin.startsWith('$2a$') || user.pin.startsWith('$2b$'))) {
+            isPinValid = await bcrypt_1.default.compare(pin, user.pin);
+        }
+        else {
+            isPinValid = (pin === user.pin);
+            if (isPinValid) {
+                // Upgrade legacy plaintext pin to secure bcrypt hash
+                try {
+                    const hashed = await bcrypt_1.default.hash(pin, BCRYPT_ROUNDS);
+                    await user.update({ pin: hashed });
+                }
+                catch (e) {
+                    console.error('Failed to auto-hash legacy PIN:', e);
+                }
+            }
+        }
         if (!isPinValid) {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
             return;
@@ -138,7 +154,13 @@ const changePin = async (req, res) => {
             res.status(404).json({ success: false, message: 'User not found' });
             return;
         }
-        const isCurrentValid = await bcrypt_1.default.compare(currentPin, user.pin);
+        let isCurrentValid = false;
+        if (user.pin && (user.pin.startsWith('$2a$') || user.pin.startsWith('$2b$'))) {
+            isCurrentValid = await bcrypt_1.default.compare(currentPin, user.pin);
+        }
+        else {
+            isCurrentValid = (currentPin === user.pin);
+        }
         if (!isCurrentValid) {
             res.status(401).json({ success: false, message: 'Current PIN is incorrect' });
             return;

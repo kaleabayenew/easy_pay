@@ -42,7 +42,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isPinValid = await bcrypt.compare(pin, user.pin);
+    let isPinValid = false;
+    if (user.pin && (user.pin.startsWith('$2a$') || user.pin.startsWith('$2b$'))) {
+      isPinValid = await bcrypt.compare(pin, user.pin);
+    } else {
+      isPinValid = (pin === user.pin);
+      if (isPinValid) {
+        // Upgrade legacy plaintext pin to secure bcrypt hash
+        try {
+          const hashed = await bcrypt.hash(pin, BCRYPT_ROUNDS);
+          await user.update({ pin: hashed });
+        } catch (e) {
+          console.error('Failed to auto-hash legacy PIN:', e);
+        }
+      }
+    }
+
     if (!isPinValid) {
       res.status(401).json({ success: false, message: 'Invalid credentials' });
       return;
@@ -153,7 +168,12 @@ export const changePin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isCurrentValid = await bcrypt.compare(currentPin, user.pin);
+    let isCurrentValid = false;
+    if (user.pin && (user.pin.startsWith('$2a$') || user.pin.startsWith('$2b$'))) {
+      isCurrentValid = await bcrypt.compare(currentPin, user.pin);
+    } else {
+      isCurrentValid = (currentPin === user.pin);
+    }
     if (!isCurrentValid) {
       res.status(401).json({ success: false, message: 'Current PIN is incorrect' });
       return;

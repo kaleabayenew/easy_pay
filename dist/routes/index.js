@@ -12,14 +12,17 @@ const transactionController_1 = require("../controllers/transactionController");
 const auth_1 = require("../middleware/auth");
 const rateLimit_1 = require("../middleware/rateLimit");
 const superadminRoutes_1 = __importDefault(require("./superadminRoutes"));
+const creditRoutes_1 = __importDefault(require("./creditRoutes"));
 const router = (0, express_1.Router)();
 // Superadmin routes
 router.use('/superadmin', superadminRoutes_1.default);
+// Credit routes
+router.use('/api/v1', creditRoutes_1.default);
 // Auth & OTP routes
 router.post('/auth/login', rateLimit_1.loginRateLimit, authController_1.login);
 router.post('/auth/register', authController_1.register);
 router.post('/auth/change-pin', auth_1.authenticate, authController_1.changePin);
-router.post('/auth/create-owner', auth_1.authenticate, authController_1.createOwner);
+router.post('/auth/create-owner', auth_1.authenticate, auth_1.requireAdmin, authController_1.createOwner);
 router.post('/auth/check-user', authController_1.checkUserExists);
 router.post('/auth/check-device', authController_1.checkDeviceExists);
 router.post('/auth/request-otp', otpController_1.requestOtp);

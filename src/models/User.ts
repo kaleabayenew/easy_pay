@@ -25,7 +25,7 @@ User.init(
     password: { type: DataTypes.STRING, allowNull: true },
     phone: { type: DataTypes.STRING, allowNull: false, unique: true },
     pin: { type: DataTypes.STRING, allowNull: false },
-    credit: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+    credit: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
     role: { type: DataTypes.STRING, defaultValue: 'device_user' },
   },

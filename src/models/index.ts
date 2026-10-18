@@ -3,6 +3,7 @@ import Device from './Device';
 import SmsLog from './SmsLog';
 import ApiKey from './ApiKey';
 import TransactionVerification from './TransactionVerification';
+import CreditTransaction from './CreditTransaction';
 
 export { sequelize } from '../config/database';
 
@@ -17,5 +18,7 @@ User.hasMany(TransactionVerification, { foreignKey: 'ownerId', as: 'transactionV
 TransactionVerification.belongsTo(User, { foreignKey: 'ownerId', as: 'owner' });
 ApiKey.hasMany(TransactionVerification, { foreignKey: 'apiKeyId', as: 'verifications' });
 TransactionVerification.belongsTo(ApiKey, { foreignKey: 'apiKeyId', as: 'apiKey' });
+User.hasMany(CreditTransaction, { as: 'creditTransactions' });
+CreditTransaction.belongsTo(User, { as: 'owner' });
 
-export { User, Device, SmsLog, ApiKey, TransactionVerification };
+export { User, Device, SmsLog, ApiKey, TransactionVerification, CreditTransaction };

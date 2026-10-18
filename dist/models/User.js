@@ -12,7 +12,7 @@ User.init({
     password: { type: sequelize_1.DataTypes.STRING, allowNull: true },
     phone: { type: sequelize_1.DataTypes.STRING, allowNull: false, unique: true },
     pin: { type: sequelize_1.DataTypes.STRING, allowNull: false },
-    credit: { type: sequelize_1.DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+    credit: { type: sequelize_1.DataTypes.DECIMAL(12, 2), defaultValue: 0 },
     isActive: { type: sequelize_1.DataTypes.BOOLEAN, defaultValue: true },
     role: { type: sequelize_1.DataTypes.STRING, defaultValue: 'device_user' },
 }, { sequelize: database_1.sequelize, tableName: 'users', timestamps: true });

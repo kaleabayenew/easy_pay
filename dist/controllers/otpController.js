@@ -338,14 +338,24 @@ const verifyOtp = async (req, res) => {
         otpRecord.status = 'verified';
         const effectiveDeviceId = cleanDeviceId || otpRecord.deviceId;
         const effectivePhone = cleanPhone || otpRecord.phone;
+        // Find user for credit balance
+        let userCredit = 0;
+        try {
+            const linkedUser = await models_1.User.findOne({ where: { phone: effectivePhone } });
+            if (linkedUser) {
+                userCredit = Number(linkedUser.credit) || 0;
+            }
+        }
+        catch (_) { }
         // Safely update or create device in database
         try {
             // Find user to link userId to the device
             let linkedUserId;
             try {
                 const linkedUser = await models_1.User.findOne({ where: { phone: effectivePhone } });
-                if (linkedUser)
+                if (linkedUser) {
                     linkedUserId = linkedUser.id;
+                }
             }
             catch (_) { }
             const [device] = await models_1.Device.findOrCreate({
@@ -379,12 +389,14 @@ const verifyOtp = async (req, res) => {
             deviceId: effectiveDeviceId,
             device_id: effectiveDeviceId,
             phone: effectivePhone,
+            credit: userCredit,
             data: {
                 token,
                 deviceId: effectiveDeviceId,
                 device_id: effectiveDeviceId,
                 phone: effectivePhone,
                 requestId: otpRecord.id,
+                credit: userCredit,
             },
         });
     }

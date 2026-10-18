@@ -78,3 +78,44 @@ export const verifyHmac = (req: Request, res: Response, next: NextFunction): voi
     res.status(401).json({ success: false, message: 'Signature verification failed' });
   }
 };
+
+export const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
+  if (!req.user || req.user.role !== 'admin') {
+    res.status(403).json({ success: false, message: 'Admin access required' });
+    return;
+  }
+  next();
+};
+
+export const authenticateStream = (req: Request, res: Response, next: NextFunction): void => {
+  try {
+    let token: string | undefined;
+
+    // Try Authorization header first
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+
+    // Fallback to query param for EventSource (can't send headers)
+    if (!token && req.query.token) {
+      token = req.query.token as string;
+    }
+
+    if (!token) {
+      res.status(401).json({ success: false, message: 'No token provided' });
+      return;
+    }
+
+    if (!process.env.JWT_SECRET) {
+      res.status(500).json({ success: false, message: 'Server configuration error' });
+      return;
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET) as { userId: number; phone: string; role: string };
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+};

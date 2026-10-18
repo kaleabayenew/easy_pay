@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyHmac = exports.authenticate = void 0;
+exports.authenticateStream = exports.requireAdmin = exports.verifyHmac = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const authenticate = (req, res, next) => {
@@ -78,3 +78,40 @@ const verifyHmac = (req, res, next) => {
     }
 };
 exports.verifyHmac = verifyHmac;
+const requireAdmin = (req, res, next) => {
+    if (!req.user || req.user.role !== 'admin') {
+        res.status(403).json({ success: false, message: 'Admin access required' });
+        return;
+    }
+    next();
+};
+exports.requireAdmin = requireAdmin;
+const authenticateStream = (req, res, next) => {
+    try {
+        let token;
+        // Try Authorization header first
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.split(' ')[1];
+        }
+        // Fallback to query param for EventSource (can't send headers)
+        if (!token && req.query.token) {
+            token = req.query.token;
+        }
+        if (!token) {
+            res.status(401).json({ success: false, message: 'No token provided' });
+            return;
+        }
+        if (!process.env.JWT_SECRET) {
+            res.status(500).json({ success: false, message: 'Server configuration error' });
+            return;
+        }
+        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    }
+    catch (error) {
+        res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+};
+exports.authenticateStream = authenticateStream;

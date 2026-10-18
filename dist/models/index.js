@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TransactionVerification = exports.ApiKey = exports.SmsLog = exports.Device = exports.User = exports.sequelize = void 0;
+exports.CreditTransaction = exports.TransactionVerification = exports.ApiKey = exports.SmsLog = exports.Device = exports.User = exports.sequelize = void 0;
 const User_1 = __importDefault(require("./User"));
 exports.User = User_1.default;
 const Device_1 = __importDefault(require("./Device"));
@@ -14,6 +14,8 @@ const ApiKey_1 = __importDefault(require("./ApiKey"));
 exports.ApiKey = ApiKey_1.default;
 const TransactionVerification_1 = __importDefault(require("./TransactionVerification"));
 exports.TransactionVerification = TransactionVerification_1.default;
+const CreditTransaction_1 = __importDefault(require("./CreditTransaction"));
+exports.CreditTransaction = CreditTransaction_1.default;
 var database_1 = require("../config/database");
 Object.defineProperty(exports, "sequelize", { enumerable: true, get: function () { return database_1.sequelize; } });
 // Associations
@@ -27,3 +29,5 @@ User_1.default.hasMany(TransactionVerification_1.default, { foreignKey: 'ownerId
 TransactionVerification_1.default.belongsTo(User_1.default, { foreignKey: 'ownerId', as: 'owner' });
 ApiKey_1.default.hasMany(TransactionVerification_1.default, { foreignKey: 'apiKeyId', as: 'verifications' });
 TransactionVerification_1.default.belongsTo(ApiKey_1.default, { foreignKey: 'apiKeyId', as: 'apiKey' });
+User_1.default.hasMany(CreditTransaction_1.default, { as: 'creditTransactions' });
+CreditTransaction_1.default.belongsTo(User_1.default, { as: 'owner' });

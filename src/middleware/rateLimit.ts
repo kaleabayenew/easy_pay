@@ -50,3 +50,6 @@ export const loginRateLimit = createRateLimiter(
 
 // SMS: max 60 requests per minute per device
 export const smsRateLimit = createRateLimiter(60, 60 * 1000);
+
+// Credit adjustment: max 20 per minute per IP
+export const creditRateLimit = createRateLimiter(20, 60 * 1000);

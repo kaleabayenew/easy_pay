@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { Device, SmsLog, User, ApiKey, TransactionVerification } from '../models';
+import { Device, SmsLog, User, ApiKey, TransactionVerification, CreditTransaction } from '../models';
 import { Op } from 'sequelize';
 
 // In-memory persistent state for config that doesn't have a dedicated table yet
@@ -76,6 +76,8 @@ const logAudit = (
   });
   if (auditLogs.length > 500) auditLogs.pop();
 };
+
+export { logAudit };
 
 // ─── Superadmin Auth ─────────────────────────────────────────────
 
@@ -227,6 +229,7 @@ export interface OwnerRecord {
   today_deposits_amount: number;
   today_withdrawals_amount: number;
   created_at: string;
+  credit?: number;
 }
 
 export const ownersStore: OwnerRecord[] = [
@@ -299,6 +302,7 @@ export const getOwners = async (req: Request, res: Response): Promise<void> => {
         initial_admin_username: u.username || `user_${u.id}`,
         pin: u.pin || '1234',
         created_at: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString(),
+        credit: Number(u.credit) || 0,
       }));
     } catch (dbErr) {
       console.warn('DB owners query failed, using memory store:', dbErr);
@@ -329,6 +333,7 @@ export const getOwners = async (req: Request, res: Response): Promise<void> => {
           initial_admin_username: item.username,
           pin: item.pin,
           created_at: item.created_at,
+          credit: item.credit || 0,
         });
       }
     }
@@ -435,6 +440,7 @@ export const getOwnersWithApiKeys = async (req: Request, res: Response): Promise
         done: stats.done,
         failed: stats.failed,
         rejected: stats.rejected,
+        credit: Number(u.credit) || 0,
         createdAt: u.createdAt?.toISOString(),
       };
     });
@@ -554,11 +560,20 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
       password,
       pin,
       mobile_pin,
+      credit,
+      initial_credit,
     } = req.body;
 
     const rawPhone = contact_phone || req.body.phone;
     if (!rawPhone || !name) {
       res.status(400).json({ success: false, message: 'Owner name and mobile phone number are required' });
+      return;
+    }
+
+    // Validate credit amount
+    const effectiveCredit = parseFloat(credit || initial_credit || '0');
+    if (isNaN(effectiveCredit) || effectiveCredit < 0) {
+      res.status(400).json({ success: false, message: 'Credit must be a non-negative number' });
       return;
     }
 
@@ -588,8 +603,21 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
         password: effectivePassword,
         role: 'device_user',
         isActive: true,
+        credit: effectiveCredit,
       });
       dbUser = userRecord;
+
+      // If credit > 0, create initial credit transaction in the same transaction
+      if (effectiveCredit > 0 && dbUser.id) {
+        await CreditTransaction.create({
+          ownerId: dbUser.id,
+          type: 'initial',
+          amount: effectiveCredit,
+          balanceBefore: 0,
+          balanceAfter: effectiveCredit,
+          performedBy: 'superadmin',
+        });
+      }
     } catch (dbErr) {
       console.warn('Database upsert warning (falling back to memory store):', dbErr);
     }
@@ -607,6 +635,7 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
       today_deposits_amount: 0,
       today_withdrawals_amount: 0,
       created_at: new Date().toISOString(),
+      credit: effectiveCredit,
     };
 
     // Remove any older duplicate entry in memory
@@ -638,6 +667,7 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
       initial_admin_username: newOwner.username,
       pin: newOwner.pin,
       temporary_password: newOwner.password,
+      credit: newOwner.credit,
     });
   } catch (error) {
     console.error('Owner creation error:', error);

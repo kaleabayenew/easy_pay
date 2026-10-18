@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.smsRateLimit = exports.loginRateLimit = void 0;
+exports.creditRateLimit = exports.smsRateLimit = exports.loginRateLimit = void 0;
 const createRateLimiter = (maxRequests, windowMs) => {
     const store = new Map();
     // Clean up expired entries every windowMs
@@ -36,3 +36,5 @@ const createRateLimiter = (maxRequests, windowMs) => {
 exports.loginRateLimit = createRateLimiter(parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10), parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10));
 // SMS: max 60 requests per minute per device
 exports.smsRateLimit = createRateLimiter(60, 60 * 1000);
+// Credit adjustment: max 20 per minute per IP
+exports.creditRateLimit = createRateLimiter(20, 60 * 1000);

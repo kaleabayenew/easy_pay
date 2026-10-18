@@ -34,7 +34,7 @@ const login = async (req, res) => {
         }
         const user = await models_1.User.findOne({
             where: { phone, isActive: true },
-            attributes: ['id', 'phone', 'pin', 'role', 'isActive', 'businessName'],
+            attributes: ['id', 'phone', 'pin', 'role', 'isActive', 'businessName', 'credit'],
         });
         if (!user) {
             // Check if user exists but is inactive
@@ -107,7 +107,7 @@ const login = async (req, res) => {
             token,
             deviceId: deviceId || null,
             phone: user.phone,
-            user: { businessName: user.businessName || null },
+            user: { businessName: user.businessName || null, credit: Number(user.credit) || 0 },
             expiresAt: Date.now() + expiresInSeconds * 1000,
         });
     }
@@ -238,6 +238,17 @@ const createOwner = async (req, res) => {
             keyPrefix,
             isActive: true,
         });
+        // Record initial credit transaction if credit > 0
+        if (parseFloat(credit) > 0) {
+            await models_1.CreditTransaction.create({
+                ownerId: owner.id,
+                type: 'initial',
+                amount: parseFloat(credit),
+                balanceBefore: 0,
+                balanceAfter: parseFloat(credit),
+                performedBy: 'admin',
+            });
+        }
         res.status(201).json({
             success: true,
             message: 'Owner created successfully',

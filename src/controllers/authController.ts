@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { User, Device, ApiKey } from '../models';
+import { User, Device, ApiKey, CreditTransaction } from '../models';
 
 const PHONE_REGEX = /^\+251[79]\d{8}$/;
 const PIN_REGEX = /^\d{4}$/;
@@ -35,7 +35,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const user = await User.findOne({
       where: { phone, isActive: true },
-      attributes: ['id', 'phone', 'pin', 'role', 'isActive', 'businessName'],
+      attributes: ['id', 'phone', 'pin', 'role', 'isActive', 'businessName', 'credit'],
     });
     if (!user) {
       // Check if user exists but is inactive
@@ -115,7 +115,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       token,
       deviceId: deviceId || null,
       phone: user.phone,
-      user: { businessName: user.businessName || null },
+      user: { businessName: user.businessName || null, credit: Number(user.credit) || 0 },
       expiresAt: Date.now() + expiresInSeconds * 1000,
     });
   } catch (error) {
@@ -263,6 +263,18 @@ export const createOwner = async (req: Request, res: Response): Promise<void> =>
       keyPrefix,
       isActive: true,
     });
+
+    // Record initial credit transaction if credit > 0
+    if (parseFloat(credit) > 0) {
+      await CreditTransaction.create({
+        ownerId: owner.id,
+        type: 'initial',
+        amount: parseFloat(credit),
+        balanceBefore: 0,
+        balanceAfter: parseFloat(credit),
+        performedBy: 'admin',
+      });
+    }
 
     res.status(201).json({ 
       success: true, 

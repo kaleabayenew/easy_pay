@@ -62,6 +62,10 @@ const verifyTransaction = async (req, res) => {
             status: 'pending',
             apiRequestReceivedAt: new Date(),
         });
+        // TODO: Hook for automatic credit deduction on transaction verification
+        // When the verification is matched, deduct from owner's credit:
+        // await adjustCredit({ ownerId: owner.id, type: 'subtract', amount, reason: 'Transaction verification', performedBy: 'system' })
+        // This should be integrated into the SMS matching logic in smsController
         res.status(201).json({
             success: true,
             message: 'Transaction verification request created. Waiting for SMS match.',

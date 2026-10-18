@@ -354,7 +354,7 @@ const getOwnersWithApiKeys = async (req, res) => {
             };
             return {
                 id: u.id.toString(),
-                name: u.businessName || `Owner #${u.id}`,
+                name: u.businessName || u.phone || `User #${u.id}`,
                 phone: u.phone,
                 isActive: u.isActive,
                 apiKey: apiKey?.keyPrefix || null,

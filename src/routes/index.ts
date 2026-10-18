@@ -15,8 +15,8 @@ const router = Router();
 // Superadmin routes
 router.use('/superadmin', superadminRoutes);
 
-// Credit routes
-router.use('/api/v1', creditRoutes);
+// Credit routes (no prefix, server.ts adds /api/v1)
+router.use(creditRoutes);
 
 // Auth & OTP routes
 router.post('/auth/login', loginRateLimit, login);

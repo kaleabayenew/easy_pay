@@ -16,8 +16,8 @@ const creditRoutes_1 = __importDefault(require("./creditRoutes"));
 const router = (0, express_1.Router)();
 // Superadmin routes
 router.use('/superadmin', superadminRoutes_1.default);
-// Credit routes
-router.use('/api/v1', creditRoutes_1.default);
+// Credit routes (no prefix, server.ts adds /api/v1)
+router.use(creditRoutes_1.default);
 // Auth & OTP routes
 router.post('/auth/login', rateLimit_1.loginRateLimit, authController_1.login);
 router.post('/auth/register', authController_1.register);
